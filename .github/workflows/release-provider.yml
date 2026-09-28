@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: MIT
+# A provider release from a provider-vX.Y.Z tag (REQ-PKG-9, REQ-PKG-17).
+name: release-provider
+
+on:
+  push:
+    tags: ['provider-v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the provider for each platform
+        run: sh sources/provider/ci/release.sh "${GITHUB_REF_NAME#provider-v}"
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --title "tofuman provider ${GITHUB_REF_NAME#provider-v}" --notes "Builds for linux/amd64, linux/arm64, darwin/arm64, and windows/amd64." sources/provider/dist/*

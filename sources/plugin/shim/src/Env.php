@@ -13,6 +13,8 @@ final class Env {
     public readonly string $autostartFile,
     public readonly string $docroot,
     public readonly string $testedBuildsFile,
+    public readonly string $loadRecordFile,
+    public readonly string $apiManifestFile,
   ) {}
 
   public static function fromGlobals(): self {
@@ -23,6 +25,8 @@ final class Env {
       $dockerManPaths['autostart-file'],
       $docroot,
       dirname(__DIR__) . '/tested-builds.json',
+      getenv('TOFUMAN_LOADED_FILE') ?: '/var/run/tofuman-api.json',
+      dirname(__DIR__, 2) . '/api/package.json',
     );
   }
 

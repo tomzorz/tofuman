@@ -55,7 +55,8 @@ function make_env(?string $testedBuildsFile = null): Env {
   global $dockerManPaths, $docroot;
   $dir = sys_get_temp_dir() . '/tofumantest-' . bin2hex(random_bytes(4));
   mkdir("$dir/data", 0755, true);
-  return new Env("$dir/data", "$dir/lock", $dockerManPaths['autostart-file'], $docroot, $testedBuildsFile ?? dirname(__DIR__) . '/shim/tested-builds.json');
+  return new Env("$dir/data", "$dir/lock", $dockerManPaths['autostart-file'], $docroot, $testedBuildsFile ?? dirname(__DIR__) . '/shim/tested-builds.json',
+    "$dir/tofuman-api.json", dirname(__DIR__) . '/api/package.json');
 }
 
 function network_name(): string {

@@ -1,0 +1,56 @@
+<?xml version='1.0' standalone='yes'?>
+<!-- SPDX-License-Identifier: GPL-2.0-or-later -->
+<!-- ci/package.sh VERSION --plg writes the version and the sha256 lines (REQ-PKG-16 to REQ-PKG-20). -->
+<!DOCTYPE PLUGIN [
+<!ENTITY name "tofuman">
+<!ENTITY author "tomzorz">
+<!ENTITY version "0000.00.00">
+<!ENTITY sha256 "0000000000000000000000000000000000000000000000000000000000000000">
+<!ENTITY github "tomzorz/tofuman">
+<!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/sources/plugin/tofuman.plg">
+<!ENTITY package "&name;-&version;.tgz">
+<!ENTITY packageURL "https://github.com/&github;/releases/download/plugin-&version;/&package;">
+]>
+
+<PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" support="https://github.com/&github;" icon="code" min="7.3.2">
+
+<CHANGES>
+### &version;
+- See https://github.com/&github;/releases/tag/plugin-&version;
+</CHANGES>
+
+<!-- The package stays on the flash drive, so each boot installs it without a download. -->
+<FILE Name="/boot/config/plugins/&name;/&package;">
+<URL>&packageURL;</URL>
+<SHA256>&sha256;</SHA256>
+</FILE>
+
+<!-- Runs at each install and at each boot, before emhttp starts unraid-api. -->
+<FILE Run="/bin/bash">
+<INLINE>
+plugin=/usr/local/emhttp/plugins/&name;
+find /boot/config/plugins/&name; -maxdepth 1 -name '&name;-*.tgz' ! -name '&package;' -delete
+rm -rf "$plugin"
+mkdir -p "$plugin"
+if ! tar -xzf /boot/config/plugins/&name;/&package; -C "$plugin"; then
+  echo "tofuman: cannot unpack &package;"
+  exit 1
+fi
+echo '{"action":"initPolicy"}' | php "$plugin/shim/tofuman-shim.php" >/dev/null
+php "$plugin/scripts/api-module.php" install &version;
+echo "tofuman &version; is installed"
+</INLINE>
+</FILE>
+
+<!-- REQ-PKG-7 and REQ-PKG-8: out of unraid-api; the registry, policy, audit log, templates, and containers stay. -->
+<FILE Run="/bin/bash" Method="remove">
+<INLINE>
+plugin=/usr/local/emhttp/plugins/&name;
+php "$plugin/scripts/api-module.php" remove
+rm -rf "$plugin"
+rm -f /boot/config/plugins/&name;/&name;-*.tgz
+echo "tofuman is removed; its registry, policy, and audit log stay in /boot/config/plugins/&name;"
+</INLINE>
+</FILE>
+
+</PLUGIN>

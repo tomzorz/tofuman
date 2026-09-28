@@ -30,5 +30,6 @@ go.work.sum
 # IntelliJ
 .idea/
 
-# Clones and caches of ci/test.sh
+# Caches of ci/test.sh and ci/release.sh, and the archives of ci/release.sh
 .work/
+dist/

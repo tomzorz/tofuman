@@ -617,7 +617,7 @@ Each line is one JSON object:
 
 ## 17. Packaging and installation
 
-How an API module stays installed across a reboot is undocumented. `unraid-api plugins install` edits `package.json` in RAM, and at each start unraid-api replaces `node_modules` from an archive on the flash drive. Spike 2 (section 19) settles the install route.
+How an API module stays installed across a reboot is undocumented. unraid-api loads a plugin only if the plugin is in the `plugins` list of `api.json` on the flash drive and in the dependencies of `package.json`. `package.json` lives in RAM and returns to its shipped state at each boot. At each start, `rc.unraid-api` replaces `node_modules` from the vendor archive on the flash drive, if that archive exists. `rc.local` installs the plugins before emhttp starts unraid-api. These facts come from the code (read 2026-09-28), and spike 2 (section 19) checks them on a server.
 
 - REQ-PKG-1: One `.plg` file MUST install the plugin.
 - REQ-PKG-2: After a reboot of the server, unraid-api MUST load the API module without an action of a person.
@@ -628,6 +628,20 @@ How an API module stays installed across a reboot is undocumented. `unraid-api p
 - REQ-PKG-7: On removal, the `.plg` file MUST remove the API module from unraid-api.
 - REQ-PKG-8: On removal, the `.plg` file MUST keep the registry, the policy, the audit log, the templates, and the containers.
 - REQ-PKG-9: Each release MUST build the provider for `linux/amd64`, `linux/arm64`, `darwin/arm64`, and `windows/amd64`.
+- REQ-PKG-10: At each run, the install script of the `.plg` file MUST copy the API module into `node_modules` of unraid-api.
+- REQ-PKG-11: At each run, the install script MUST add the API module to the peer dependencies in `package.json` of unraid-api.
+- REQ-PKG-12: If the `plugins` list of `api.json` lacks the API module, the install script MUST add the API module to that list.
+- REQ-PKG-13: If the vendor archive lacks the current version of the API module, the install script MUST rebuild the vendor archive with `rc.unraid-api archive-dependencies`. Reason: each start of unraid-api replaces `node_modules` from the vendor archive.
+- REQ-PKG-14: If unraid-api runs while the install script runs, the install script MUST restart unraid-api.
+- REQ-PKG-15: When unraid-api loads the API module, the API module MUST write its version and the process ID of unraid-api to `/var/run/tofuman-api.json`. The tab MUST read that file for REQ-PKG-3.
+
+Releases (decided 2026-09-28):
+
+- REQ-PKG-16: The tag of a plugin release MUST be `plugin-YYYY.MM.DD`, and the version of the `.plg` file MUST be that date. Reason: the plugin manager of Unraid compares versions with `strcmp`. A second release on one day appends one lowercase letter to the date.
+- REQ-PKG-17: The tag of a provider release MUST be `provider-vX.Y.Z`, with a semantic version.
+- REQ-PKG-18: The `.plg` file MUST live at `sources/plugin/tofuman.plg` on `main`, and its `pluginURL` MUST be the raw GitHub URL of that file.
+- REQ-PKG-19: The `.plg` file MUST download the package from the assets of the plugin release, and MUST check the SHA256 hash of the package.
+- REQ-PKG-20: The build of the package MUST be reproducible. The release workflow MUST refuse to publish a package whose SHA256 hash differs from the hash in the `.plg` file of the tagged commit.
 
 ## 18. Testing
 
@@ -660,7 +674,7 @@ If a step fails, keep the throwaway containers, copy the audit log, and do not r
 ## 19. Spikes
 
 - Spike 1, 2026-09-28, **go** ([`spikes/2026-09-28-dockerman-helpers-off-unraid`](../spikes/2026-09-28-dockerman-helpers-off-unraid/README.md)): the DockerMan helpers load in `php-cli` with `_var()` and four globals stubbed. 17 of 17 real templates are a fixed point of `xmlToVar`, `postToXML`, `xmlToVar`. 16 of 17 generated commands created a matching container on a plain Docker host, and the 17th needs the nvidia runtime.
-- Spike 2, open: find an install route for the API module that survives a reboot and an update of Unraid OS (REQ-PKG-2, REQ-PKG-3). A person runs spike 2 on a server. The candidate route: at each boot, the `.plg` file copies the API module into `node_modules`, adds it to `peerDependencies` and to `api.json`, and runs `rc.unraid-api archive-dependencies`.
+- Spike 2, open: check on a server that the install route of REQ-PKG-10 to REQ-PKG-14 meets REQ-PKG-2 and REQ-PKG-3. A person runs spike 2 on NewIntersect, with a written rollback (decided 2026-09-28). Read in the code 2026-09-28: the load conditions and the restore at each start of section 17. A plugin that fails to import leaves unraid-api running and raises an alert notification.
 - Spike 3, open: find out whether a stylesheet with `:has()` on `input.autostart[container=NAME]` can mark managed containers in the stock container table (deferred, section 21).
 - Spike 4, 2026-09-28, **go** ([`spikes/2026-09-28-plugin-testing-on-opentofu`](../spikes/2026-09-28-plugin-testing-on-opentofu/README.md)): terraform-plugin-testing runs OpenTofu 1.12.6 through a create, an import by name, an update in place, and a read that drops a vanished resource. The run needs `TF_ACC_PROVIDER_HOST=registry.opentofu.org` and `TF_ACC_PROVIDER_NAMESPACE`, and without them `tofu init` fails.
 
@@ -672,7 +686,6 @@ If a step fails, keep the throwaway containers, copy the audit log, and do not r
 - Whether Unraid Connect's flash backup uploads the plaintext API key files is unverified.
 - Whether the free text that `configureUps` writes reaches command execution is untraced.
 - Whether the webgui **Update** action works on a container with a digest is untested.
-- The URL from which the `.plg` file installs the plugin is undecided. Assumption: the assets of a GitHub release.
 - How the provider reaches OpenTofu before a registry lists it is undecided. Assumption: a local filesystem mirror, filled from the assets of a GitHub release.
 
 ## 21. Deferred

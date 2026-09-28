@@ -199,6 +199,20 @@ function test_tested_build_covers_the_loaded_files(): void {
   }
 }
 
+function test_the_load_record_tells_whether_unraid_api_loaded_the_module(): void {
+  $env = make_env();
+  $expected = Tofuman\Json::read($env->apiManifestFile)['version'];
+  $state = fn() => Tofuman\LoadRecord::status($env)['state'];
+  same('missing', $state());
+  $record = fn(string $version, int $pid) => file_put_contents($env->loadRecordFile, json_encode(['version' => $version, 'pid' => $pid, 'loadedAt' => '2026-09-28T12:00:00.000Z']));
+  $record($expected, getmypid());
+  same('loaded', $state());
+  $record('2000.01.01', getmypid());
+  same('stale', $state(), 'a load of an older version');
+  $record($expected, 2147483646);
+  same('gone', $state(), 'a load by a process that is gone');
+}
+
 function test_the_tab_saves_only_a_valid_policy(): void {
   $env = make_env();
   $operations = new Tofuman\Operations($env);
@@ -229,7 +243,7 @@ function test_shim_speaks_json_on_stdin_and_stdout(): void {
   same(['ok' => true, 'result' => true], $ask(['action' => 'initPolicy']));
   same(['ok' => true, 'result' => false], $ask(['action' => 'initPolicy']), 'a second init');
   $state = $ask(['action' => 'tabState', 'caller' => caller(true)]);
-  same(['managed', 'handMade', 'policy', 'audit', 'testedBuild'], array_keys($state['result'] ?? []), 'the parts of the tab state');
+  same(['managed', 'handMade', 'policy', 'audit', 'testedBuild', 'apiModule'], array_keys($state['result'] ?? []), 'the parts of the tab state');
   same([], $state['result']['policy']['errors'], 'the default policy');
   same(['ok' => true, 'result' => []], $ask(['action' => 'list', 'caller' => caller(true)]));
   same(['ok' => false, 'refused' => true, 'errors' => ['the caller x is not on the key allowlist']], $ask(['action' => 'list', 'caller' => ['id' => 'x', 'name' => 'stranger', 'admin' => false]]));

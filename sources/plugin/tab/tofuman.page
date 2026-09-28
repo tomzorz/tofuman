@@ -22,6 +22,7 @@ Markdown="false"
 
 <div id="tofuman">
   <p id="tofuman-build" class="tofuman-note">Loading.</p>
+  <p id="tofuman-api" class="tofuman-note"></p>
 
   <h3>Managed containers</h3>
   <table>
@@ -76,6 +77,15 @@ Markdown="false"
     $('#tofuman-build')
       .text(build ? 'The webgui files match the tested build ' + build + '.' : 'The webgui files match no tested build. tofuman refuses every mutation and every adoption until a plugin update covers this Unraid release.')
       .toggleClass('tofuman-warning', !build);
+
+    // REQ-PKG-3
+    var api = state.apiModule;
+    $('#tofuman-api').text({
+      loaded: 'unraid-api loaded the API module ' + api.version + ' at ' + utc(api.loadedAt) + ' UTC.',
+      stale: 'unraid-api runs version ' + api.version + ' of the API module, and the plugin is at ' + api.expected + '. Restart unraid-api to load it.',
+      gone: 'unraid-api loaded the API module, but that process is gone. Check that unraid-api runs.',
+      missing: 'unraid-api has not loaded the API module since the server started, so tofu cannot reach tofuman. /var/log/graphql-api.log says why.'
+    }[api.state]).toggleClass('tofuman-warning', api.state !== 'loaded');
 
     var managed = $('#tofuman-managed').empty();
     $.each(state.managed, function (_, c) {

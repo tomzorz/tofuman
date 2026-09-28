@@ -26,6 +26,6 @@ $DockerUpdate = new DockerUpdate();
 $DockerTemplates = new DockerTemplates();
 $tofumanLoadedFiles = get_included_files(); // the webgui files that a tested build covers (REQ-UPG-2)
 
-foreach (['Refusal', 'Failure', 'Env', 'Json', 'Arguments', 'Flags', 'Definition', 'Validator', 'Policy', 'Registry', 'Autostart', 'Mounts', 'TestedBuild', 'Docker', 'Audit', 'Operations', 'Shim'] as $class) {
+foreach (['Refusal', 'Failure', 'Env', 'Json', 'Arguments', 'Flags', 'Definition', 'Validator', 'Policy', 'Registry', 'Autostart', 'Mounts', 'TestedBuild', 'Docker', 'Audit', 'LoadRecord', 'Operations', 'Shim'] as $class) {
   require_once __DIR__ . "/src/$class.php";
 }

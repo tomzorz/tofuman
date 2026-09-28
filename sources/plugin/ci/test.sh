@@ -102,7 +102,7 @@ case "${1:-}" in
   *)
     run php /plugin/tests/run.php "$@"
     build_api
-    (cd "$plugin/api" && node --test build/test/schema.test.js)
+    (cd "$plugin/api" && node --test build/test/schema.test.js build/test/module.test.js)
     run node --test /plugin/api/build/test/service.test.js
     ;;
 esac

@@ -63,7 +63,7 @@ final class Shim {
     return true;
   }
 
-  /** Everything the tab shows, in one process: REQ-TAB-2, REQ-TAB-4, REQ-TAB-8, REQ-TAB-10, REQ-TAB-11. */
+  /** Everything the tab shows, in one process: REQ-TAB-2, REQ-TAB-4, REQ-TAB-8, REQ-TAB-10, REQ-TAB-11, REQ-PKG-3. */
   private static function tabState(Env $env, Operations $operations, array $caller): array {
     return [
       'managed' => $operations->list($caller),
@@ -71,6 +71,7 @@ final class Shim {
       'policy' => Policy::read($env->policyFile()),
       'audit' => (new Audit($env->auditFile()))->tail(100),
       'testedBuild' => self::testedBuild($env),
+      'apiModule' => LoadRecord::status($env),
     ];
   }
 
