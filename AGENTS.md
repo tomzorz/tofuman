@@ -1,6 +1,6 @@
 # tofuman
 
-An Unraid plugin and an OpenTofu provider that let tofu declare Docker containers which stay ordinary Unraid containers. The plugin extends the built-in Unraid API with mutations that write DockerMan user templates through the webgui's own helpers, and the provider is a client of those mutations. The design is `docs/DESIGN.md`, with each decision in the section it affects and no separate decisions file.
+An Unraid plugin and an OpenTofu provider that let tofu declare Docker containers which stay ordinary Unraid containers. The plugin extends the built-in Unraid API with mutations that write DockerMan user templates through the webgui's own helpers, and the provider is a client of those mutations. The specification is `docs/SPEC.md`, in Lojbanlite, with each decision in the section it affects and no separate decisions file. Code follows the spec; a change of behaviour changes the spec first.
 
 ## Repo
 
