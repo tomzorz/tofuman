@@ -6,6 +6,24 @@
 
 declare(strict_types=1);
 
+/** The .plg file as the plugin manager of the webgui reads it (dynamix.plugin.manager/scripts/plugin). */
+function test_the_plg_file_parses_like_the_plugin_manager_reads_it(): void {
+  libxml_use_internal_errors(true);
+  $xml = simplexml_load_file(dirname(__DIR__) . '/tofuman.plg', null, LIBXML_NOCDATA);
+  $errors = array_map(fn(LibXMLError $e) => trim($e->message) . " on line {$e->line}", libxml_get_errors());
+  libxml_clear_errors();
+  check($xml !== false && $errors === [], 'tofuman.plg does not parse: ' . implode('; ', $errors));
+  $version = (string)$xml->attributes()->version;
+  check((bool)preg_match('/^(\d{4}\.\d{2}\.\d{2}[a-z]?|0000\.00\.00)$/', $version), "the version $version breaks REQ-PKG-16");
+  same('https://raw.githubusercontent.com/tomzorz/tofuman/main/sources/plugin/tofuman.plg', (string)$xml->attributes()->pluginURL, 'REQ-PKG-18');
+  same("https://github.com/tomzorz/tofuman/releases/download/plugin-$version/tofuman-$version.tgz", (string)$xml->FILE[0]->URL, 'REQ-PKG-19');
+  check((bool)preg_match('/^[0-9a-f]{64}$/', (string)$xml->FILE[0]->SHA256), 'the package has no SHA256 hash');
+  foreach ($xml->FILE as $file) {
+    check(!str_contains((string)$file->INLINE, '&'), "an entity stayed unexpanded in: {$file->INLINE}");
+  }
+  same('remove', (string)$xml->FILE[2]->attributes()->Method);
+}
+
 function test_the_api_module_goes_into_unraid_api_and_out_again(): void {
   $dir = sys_get_temp_dir() . '/tofumantest-package-' . bin2hex(random_bytes(4));
   mkdir("$dir/plugin/api/dist", 0755, true);

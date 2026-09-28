@@ -1,11 +1,11 @@
 <?xml version='1.0' standalone='yes'?>
 <!-- SPDX-License-Identifier: GPL-2.0-or-later -->
-<!-- ci/package.sh VERSION --plg writes the version and the sha256 lines (REQ-PKG-16 to REQ-PKG-20). -->
+<!-- The release step, ci/package.sh with its plg option, writes the version and sha256 entities (REQ-PKG-16 to REQ-PKG-20). -->
 <!DOCTYPE PLUGIN [
 <!ENTITY name "tofuman">
 <!ENTITY author "tomzorz">
-<!ENTITY version "0000.00.00">
-<!ENTITY sha256 "0000000000000000000000000000000000000000000000000000000000000000">
+<!ENTITY version "2026.09.28">
+<!ENTITY sha256 "203e77ea02347a9380f0911a9fb505feca0094fae4ee38b3252c5d996d151be3">
 <!ENTITY github "tomzorz/tofuman">
 <!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/sources/plugin/tofuman.plg">
 <!ENTITY package "&name;-&version;.tgz">
