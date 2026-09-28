@@ -358,6 +358,10 @@ The tab does not show the OpenTofu address of a resource, because OpenTofu does 
 - REQ-PRV-10: If a read finds no managed container for the managed ID, the provider MUST remove the resource from the state.
 - REQ-PRV-11: The provider MUST NOT write the API key or the value of a `secret` block to a log.
 - REQ-PRV-12: If `insecure` is false, the provider MUST verify the TLS certificate of the endpoint against the system roots and against `ca_certificate`, if `ca_certificate` is set.
+- REQ-PRV-13: Before the plan, the provider MUST refuse each value that the shim rewrites instead of refusing. Reason: after such a rewrite, the state differs from the plan. The provider refuses these values:
+  - A `shell` that is not exactly one of `sh` or `bash`.
+  - A `mac_address` that is neither empty nor 6 lowercase pairs of hexadecimal digits joined by `:`.
+  - A block with an empty value and a non-empty `default`.
 
 ### 14.1 Resource schema
 
@@ -401,7 +405,7 @@ Blocks of `tofuman_container`, each of which becomes one config entry:
 | `label` | `key`, `value` | type Label |
 | `device` | `host_path` | type Device |
 
-Each block also takes the optional attributes `display_name`, `description`, `display` (default `always`), `required` (default false), and `default`. `display_name` defaults to the target of the config entry. `mode` of `path` takes exactly one of `rw`, `ro`, `rw,slave`, `rw,shared`, `ro,slave`, or `ro,shared`.
+Each block also takes the optional attributes `display_name`, `description`, `display` (default `always`), `required` (default false), and `default`. `display_name` defaults to the target of the config entry, and for a `device` block to `host_path`, because a device entry has an empty target. `mode` of `path` takes exactly one of `rw`, `ro`, `rw,slave`, `rw,shared`, `ro,slave`, or `ro,shared`.
 
 On macvlan, ipvlan, and host networks, DockerMan exports a `port` block as the variable `TCP_PORT_<container_port>` or `UDP_PORT_<container_port>` instead of a port mapping.
 

@@ -8,4 +8,4 @@ Status: specified, nothing to install yet. Start at [docs/SPEC.md](docs/SPEC.md)
 
 ## License
 
-GPL-2.0-or-later, see [LICENSE](LICENSE). The plugin loads and runs inside Unraid's GPL code, the webgui's PHP helpers and the unraid-api. The OpenTofu provider will be MIT, in its own folder, because it only talks to the plugin over the network.
+GPL-2.0-or-later, see [LICENSE](LICENSE). The plugin loads and runs inside Unraid's GPL code, the webgui's PHP helpers and the unraid-api. The OpenTofu provider in `sources/provider/` is MIT, see [its LICENSE](sources/provider/LICENSE), because it only talks to the plugin over the network.

@@ -23,3 +23,13 @@ jobs:
         run: sh sources/plugin/ci/test.sh
         env:
           WEBGUI_TAG: ${{ matrix.webgui }}
+
+  provider:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Provider tests against the test server
+        run: sh sources/provider/ci/test.sh -v

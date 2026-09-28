@@ -7,8 +7,11 @@
 # so it runs on a disposable Docker host only, never on an Unraid server. The host needs git,
 # node, and npm.
 #
-#   WEBGUI_TAG=7.3.2 ci/test.sh [filter]   run the tests, optionally only matching ones
-#   WEBGUI_TAG=7.3.2 ci/test.sh --hashes   print the files and hashes for tested-builds.json
+#   WEBGUI_TAG=7.3.2 ci/test.sh [filter]       run the tests, optionally only matching ones
+#   WEBGUI_TAG=7.3.2 ci/test.sh --hashes       print the files and hashes for tested-builds.json
+#   WEBGUI_TAG=7.3.2 ci/test.sh --server PORT  start the test server of the provider tests
+#                                              (REQ-TST-7) on 127.0.0.1:PORT, with the API key
+#                                              in TOFUMAN_TEST_API_KEY, and leave it running
 set -eu
 if [ -d /boot/config/plugins/dockerMan ]; then
   echo "this looks like an Unraid server; the shim tests run on a disposable Docker host only" >&2
@@ -31,8 +34,10 @@ cleanup() {
 }
 trap cleanup EXIT
 
-run() {
-  docker run --rm -i \
+# docker run in the test image, with the shim, the webgui source, and the Docker of this host;
+# the arguments are further docker run options, the image, and the command
+in_image() {
+  docker run \
     -v /var/run/docker.sock:/var/run/docker.sock \
     -v "$plugin:/plugin:ro" \
     -v "$work/webgui-$tag:/webgui:ro" \
@@ -40,28 +45,56 @@ run() {
     -e TOFUMAN_DOCROOT=/webgui/emhttp \
     -e TOFUMAN_VAR_INI=/plugin/tests/fixtures/var.ini \
     -e TOFUMAN_TEST_NETWORK=$network \
-    tofuman-shim-test "$@"
+    -e TOFUMAN_SHIM=/plugin/shim/tofuman-shim.php \
+    "$@"
 }
 
-if [ "${1:-}" = "--hashes" ]; then
-  echo '{"action":"testedBuild"}' | run php /plugin/shim/tofuman-shim.php
-  exit
-fi
+run() {
+  in_image --rm -i tofuman-shim-test "$@"
+}
 
-run php /plugin/tests/run.php "$@"
+# The API module, built on this host against @unraid/shared from source.
+build_api() {
+  shared=$(sh "$plugin/api/ci/unraid-shared.sh" "$work")
+  (
+    cd "$plugin/api"
+    npm ci --no-audit --no-fund --loglevel=error
+    # unraid-api ships @unraid/shared inside its own node_modules, and so do the tests. npm would
+    # not install it: it is a peer, and .npmrc leaves peers alone.
+    rm -rf node_modules/@unraid/shared
+    mkdir -p node_modules/@unraid
+    cp -r "$shared" node_modules/@unraid/shared
+    npm run --silent build:test
+  )
+}
 
-# The API module: built on this host against @unraid/shared from source, its schema checked
-# here, its service tested in the container against the real shim.
-shared=$(sh "$plugin/api/ci/unraid-shared.sh" "$work")
-(
-  cd "$plugin/api"
-  npm ci --no-audit --no-fund --loglevel=error
-  # unraid-api ships @unraid/shared inside its own node_modules, and so do the tests. npm would
-  # not install it: it is a peer, and .npmrc leaves peers alone.
-  rm -rf node_modules/@unraid/shared
-  mkdir -p node_modules/@unraid
-  cp -r "$shared" node_modules/@unraid/shared
-  npm run --silent build:test
-  node --test build/test/schema.test.js
-)
-run env TOFUMAN_SHIM=/plugin/shim/tofuman-shim.php node --test /plugin/api/build/test/service.test.js
+case "${1:-}" in
+  --hashes)
+    echo '{"action":"testedBuild"}' | run php /plugin/shim/tofuman-shim.php
+    ;;
+  --server)
+    port=${2:?usage: ci/test.sh --server PORT}
+    : "${TOFUMAN_TEST_API_KEY:?the test server needs TOFUMAN_TEST_API_KEY}"
+    build_api
+    docker rm -f tofumantest-server >/dev/null 2>&1 || true
+    in_image -d --name tofumantest-server -p "127.0.0.1:$port:8931" -e TOFUMAN_TEST_API_KEY tofuman-shim-test node /plugin/api/build/test/server.js >/dev/null
+    tries=0
+    until docker exec tofumantest-server node -e "fetch('http://127.0.0.1:8931/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))" 2>/dev/null; do
+      tries=$((tries + 1))
+      if [ $tries -ge 30 ]; then
+        docker logs tofumantest-server >&2
+        exit 1
+      fi
+      sleep 1
+    done
+    # The server, the containers it creates, and the network stay up for the provider tests,
+    # which remove them.
+    trap - EXIT
+    ;;
+  *)
+    run php /plugin/tests/run.php "$@"
+    build_api
+    (cd "$plugin/api" && node --test build/test/schema.test.js)
+    run node --test /plugin/api/build/test/service.test.js
+    ;;
+esac
