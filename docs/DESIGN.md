@@ -10,6 +10,10 @@ An Unraid plugin plus an OpenTofu provider, so containers on an Unraid server ca
 
 I'm building it for my own server first. Nothing in the repo names a machine, a host, an address or my network. The source is public on GitHub since 2026-09-28; releases (a Community Applications listing, a provider registry entry) wait until it has survived an Unraid upgrade or two.
 
+## License
+
+2026-09-28: GPL-2.0-or-later for the repository, MIT for the provider. The plugin runs inside Unraid's GPL code: the PHP side loads the webgui's GPLv2 helpers into its own process, and the API module loads into unraid-api and imports `@unraid/shared`, both GPL-2.0-or-later. The provider only talks to the plugin over the network, so it carries MIT in its own folder and takes it along when it moves to a repo of its own. `LICENSE` is the verbatim GPL-2.0 text; the or-later grant is in the README and in each source file's SPDX header.
+
 ## Marking and owning containers
 
 The plugin marks its containers with a Docker label in the `tofuman` namespace, written as a template Config entry of `Type="Label"` whose value is a per-container UUID, and it keeps a registry on the flash drive. The registry is the source of truth, because the label can't be on its own: the Edit form shows it (the `Display` attribute only collapses an entry or hides its buttons), a user can edit or delete it, and "Add Container" from an existing `my-*.xml` copies it onto the clone. The UUID is how the plugin spots clones, renames and removals.
@@ -81,7 +85,6 @@ The webgui's PHP helpers, at the tag the plugin pins, run in a php-cli container
 - How pinned digests get bumped. Assumption: by hand in HCL.
 - Autostart order. Not managed until decided.
 - DockerMan writes every template variable to the flash in plaintext, masked or not. How the provider treats `Mask="true"` values is undecided. Assumption: sensitive attributes.
-- Licence, undecided until publishing. The plugin runs GPLv2 webgui code, which points at GPLv2 for the plugin; the provider can differ.
 - How the plugin reaches a server before it's published (where the `.plg` comes from), and how the provider reaches tofu (a dev override or a mirror).
 - The `:has()` badge needs its spike.
 - Whether the webgui's Update action behaves on a digest-pinned container. Untested.

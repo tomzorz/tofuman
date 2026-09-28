@@ -7,6 +7,7 @@ An Unraid plugin and an OpenTofu provider that let tofu declare Docker container
 - Single-branch: commit to `main`, push `main`.
 - This repository is public. Nothing in it names a particular machine, host, address, network or anyone's setup: not in code, docs, examples, test fixtures or commit messages. Examples use generic Unraid paths (`/mnt/user/appdata/...`) and documentation addresses (`192.0.2.0/24`).
 - The plugin and the provider share this repo until the provider is published to a registry, which needs a repo of its own.
+- License: GPL-2.0-or-later for everything except the provider, which is MIT in its own folder. Every source file starts with an `SPDX-License-Identifier` line.
 - Archetype layout: projects go in `sources/<project>/`, each with its stack's ignore file from archetype, created on the day the project exists.
 - LFS is on. A fresh clone needs `git lfs install --local`.
 - Spikes live in `spikes/YYYY-MM-DD-<slug>/` and are committed. Each has a README with its question, findings and verdict.

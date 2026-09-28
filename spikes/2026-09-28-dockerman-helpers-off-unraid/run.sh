@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
 # Spike runner for a disposable Linux Docker host. It creates containers named tofuman-spike-*,
 # never starts them, and removes them and its macvlan network (on a dummy parent) at the end.
 #

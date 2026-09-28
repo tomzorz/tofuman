@@ -1,4 +1,5 @@
 <?php
+// SPDX-License-Identifier: GPL-2.0-or-later
 // Spike: run DockerMan's template helpers (webgui Helpers.php) outside Unraid.
 //
 //   php roundtrip.php write   <webgui-checkout> <templates-dir> <out-dir>
