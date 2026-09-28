@@ -8,7 +8,7 @@ on:
   pull_request:
 
 jobs:
-  shim:
+  plugin:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -16,7 +16,10 @@ jobs:
         webgui: ['7.3.2']
     steps:
       - uses: actions/checkout@v4
-      - name: Shim tests against webgui ${{ matrix.webgui }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Plugin tests against webgui ${{ matrix.webgui }}
         run: sh sources/plugin/ci/test.sh
         env:
           WEBGUI_TAG: ${{ matrix.webgui }}

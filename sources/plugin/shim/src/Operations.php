@@ -13,8 +13,20 @@ namespace Tofuman;
 final class Operations {
   public function __construct(private readonly Env $env) {}
 
+  /** REQ-AUTH-2 to REQ-AUTH-4 for queries, which the policy otherwise leaves alone (REQ-POL-9). */
+  public function authorize(array $caller): bool {
+    if (($caller['admin'] ?? false) === true) {
+      return true;
+    }
+    if (!Policy::load($this->env->policyFile())->allowsCaller($caller)) {
+      throw new Refusal(['the caller ' . ($caller['id'] ?? 'unknown') . ' is not on the key allowlist']);
+    }
+    return true;
+  }
+
   /** @return list<array> every managed container that exists */
-  public function list(): array {
+  public function list(array $caller): array {
+    $this->authorize($caller);
     return $this->locked(function (): array {
       [$registry, $containers] = $this->state();
       $views = [];
@@ -28,7 +40,8 @@ final class Operations {
     });
   }
 
-  public function get(?string $id, ?string $name): ?array {
+  public function get(?string $id, ?string $name, array $caller): ?array {
+    $this->authorize($caller);
     if (($id === null) === ($name === null)) {
       throw new Refusal(['a get takes exactly one of id or name']);
     }

@@ -30,8 +30,8 @@ function test_create_writes_a_native_container(): void {
   same($id, Definition::markerOf(Definition::read(template_file('tofumantest-a'))), 'the marker in the template');
   same('tofumantest-a', Json::read($env->registryFile())['containers'][$id]['name']);
   same(['createContainer', 'succeeded'], [last_audit($env)['action'], last_audit($env)['result']]);
-  same($view, (new Operations($env))->get($id, null));
-  same([$view], (new Operations($env))->list());
+  same($view, (new Operations($env))->get($id, null, caller()));
+  same([$view], (new Operations($env))->list(caller()));
 }
 
 function test_update_recreates_and_renames_in_place(): void {
@@ -119,7 +119,7 @@ function test_a_failed_update_restores_the_previous_container(): void {
   $before = $operations->create(definition(), caller());
   $failure = fails_at(fn() => $operations->update($before['id'], definition(['extraParams' => ['--runtime', 'tofumantest-no-such-runtime']]), caller()), 'create');
   check(str_contains($failure->getMessage(), 'is back'), "the failure does not say that the container is back: {$failure->getMessage()}");
-  same($before['definition'], $operations->get($before['id'], null)['definition']);
+  same($before['definition'], $operations->get($before['id'], null, caller())['definition']);
   same('alpha', inspect('tofumantest-a')['Config']['Hostname']);
 }
 
@@ -179,6 +179,6 @@ function test_a_gone_container_reads_as_absent_and_can_come_back(): void {
   $operations = new Operations($env);
   $id = $operations->create(definition(), caller())['id'];
   docker('rm tofumantest-a'); // removed in the webgui: the template stays
-  same(null, $operations->get($id, null));
+  same(null, $operations->get($id, null, caller()));
   same($id, $operations->create(definition(), caller())['id'], 'the create did not reuse the entry');
 }

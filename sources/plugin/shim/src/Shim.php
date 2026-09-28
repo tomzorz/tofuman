@@ -22,8 +22,9 @@ final class Shim {
       $args = $request['args'] ?? [];
       $caller = $request['caller'] ?? [];
       $result = match ($request['action'] ?? '') {
-        'list' => $operations->list(),
-        'get' => $operations->get($args['id'] ?? null, $args['name'] ?? null),
+        'authorize' => $operations->authorize($caller),
+        'list' => $operations->list($caller),
+        'get' => $operations->get($args['id'] ?? null, $args['name'] ?? null, $caller),
         'check' => $operations->check((string)$args['mutation'], $args['id'] ?? null, $args['definition'] ?? null, $caller),
         'create' => $operations->create($args['definition'], $caller),
         'update' => $operations->update((string)$args['id'], $args['definition'], $caller),

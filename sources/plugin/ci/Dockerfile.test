@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-# php-cli for the shim tests, with the docker CLI where DockerMan's helpers expect it.
+# php-cli for the shim tests, with the docker CLI where DockerMan's helpers expect it, and node
+# for the API module tests, which run the shim the way unraid-api will.
 # Unraid 7.2 ships PHP 8.3 (release notes 7.2.5 and 7.2.7), and no 7.3 release note changes it.
 FROM php:8.3-cli
 COPY --from=docker:cli /usr/local/bin/docker /usr/bin/docker
+COPY --from=node:22-bookworm-slim /usr/local/bin/node /usr/local/bin/node
