@@ -169,6 +169,7 @@ The registry decides which containers tofuman owns. The marker carries the same 
 - REQ-OWN-9: If two or more containers carry the marker of one managed ID, the plugin MUST treat only the container with the name in the registry as the managed container.
 - REQ-OWN-10: If no container has the name of a registry entry, the plugin MUST look for the marker of that entry. If exactly one container carries that marker, the plugin MUST record the name of that container in the entry.
 - REQ-OWN-11: If a registry entry has no container and no template, the API module MUST remove that entry.
+- REQ-OWN-12: If a registry entry has a template and no container, a query MUST report that entry as absent. A `createContainer` for the name of that entry MUST reuse the entry and its managed ID (added 2026-09-28 while building the shim: without this rule, a container that a person removes in the webgui can never come back through tofu).
 
 ## 6. Validation
 
@@ -205,6 +206,9 @@ The **Update** action, `rebuild_container`, and CA Auto Update rebuild a contain
 - REQ-VAL-17: The API module MUST refuse a `Repository` that does not match the reference grammar of `github.com/distribution/reference`.
 - REQ-VAL-18: The API module MUST refuse a network that does not exist on the server. Reason: `xmlToVar` reads an unknown network as `none` (spike 1), so the definition would show drift after every apply.
 - REQ-VAL-19: The API module MUST refuse a definition that enables Tailscale.
+- REQ-VAL-20: The API module MUST refuse a definition that changes when it goes through `postToXML` and back through `xmlToVar`, and MUST name each field that changes.
+
+REQ-VAL-20 exists because the read path of DockerMan rewrites some strings on its own. `xmlToVar` removes backslashes from `Overview`, removes `<` and `>` from each string that looks like HTML, and removes whitespace from the name. Without REQ-VAL-20, such a definition would show drift after every apply.
 
 Docker keeps the last `-l` for a label key, so REQ-VAL-7 and REQ-VAL-9 protect `net.unraid.docker.managed` and the marker from an override.
 
@@ -327,6 +331,10 @@ If step 2, 3, or 4 fails, do not add the tested build. Fix the plugin first, and
 - REQ-TAB-5: **Adopt** MUST add a registry entry with a new managed ID, write the marker into the template, and append a line to the audit log.
 - REQ-TAB-6: **Adopt** MUST NOT recreate the container. The Docker label of the marker appears at the next recreate.
 - REQ-TAB-7: **Adopt** MUST refuse a template that enables Tailscale.
+- REQ-TAB-14: **Adopt** MUST refuse every adoption while the webgui files on the server match no tested build.
+- REQ-TAB-15: **Adopt** MUST refuse a container that is not a DockerMan container or that has no template.
+- REQ-TAB-16: **Adopt** MUST refuse a template whose `ExtraParams` or `PostArgs` needs the shell for more than a split into arguments: a separator, a redirection, a subshell, an expansion, a glob, or a comment. Reason: stored as quoted arguments (REQ-VAL-4), such text would change what the container runs.
+- REQ-TAB-17: **Adopt** MUST refuse a template whose definition breaks REQ-VAL-20.
 - REQ-TAB-8: The tab MUST let a person edit the policy, including the key allowlist.
 - REQ-TAB-9: The tab MUST refuse to save a policy that the API module would reject as invalid.
 - REQ-TAB-10: The tab MUST show the last 100 lines of the audit log.
@@ -618,7 +626,7 @@ How an API module stays installed across a reboot is undocumented. `unraid-api p
 ## 18. Testing
 
 - REQ-TST-1: GitHub Actions MUST run the tests of the shim, of the API module, and of the provider on each push to `main`.
-- REQ-TST-2: The shim tests MUST run in `php-cli` against the webgui source of each tested build.
+- REQ-TST-2: The shim tests MUST run in `php-cli` 8.3 against the webgui source of each tested build. Unraid 7.2 ships PHP 8.3 (release notes 7.2.5 and 7.2.7), and no release note of Unraid 7.3 changes that version.
 - REQ-TST-3: The shim tests MUST cover template round trips, validation, the policy, and the commands from `xmlToCommand`.
 - REQ-TST-4: The shim tests MUST run each generated `docker create` on the Docker of the test runner, with a stand-in image. The shim tests MUST compare the output of `docker inspect` with the definition.
 - REQ-TST-5: The shim tests MUST NOT start a container.
@@ -650,7 +658,6 @@ If a step fails, keep the throwaway containers, copy the audit log, and do not r
 
 ## 20. Open items
 
-- The PHP version of Unraid 7.3.2 is unverified. The tests use PHP 8.3.
 - Whether `/etc/nginx/nginx.conf` on the server sets a longer proxy timeout is unverified. The design does not depend on it.
 - How a person moves a digest to a newer image is undecided. Assumption: by hand in HCL.
 - Adoption of a template that came straight from Community Applications drops the elements that `postToXML` does not write. How the tab reports that loss is undecided.

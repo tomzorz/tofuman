@@ -1,0 +1,2 @@
+# The webgui checkout and the bind mount that ci/test.sh creates.
+.work/

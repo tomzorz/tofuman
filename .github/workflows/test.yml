@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# REQ-TST-1: the tests of each component on every push to main.
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  shim:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # One entry per tested build in sources/plugin/shim/tested-builds.json (REQ-TST-2).
+        webgui: ['7.3.2']
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shim tests against webgui ${{ matrix.webgui }}
+        run: sh sources/plugin/ci/test.sh
+        env:
+          WEBGUI_TAG: ${{ matrix.webgui }}

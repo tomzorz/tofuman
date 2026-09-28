@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>tofumantest-shell</Name>
+  <Repository>busybox:latest</Repository>
+  <Registry/>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support/>
+  <Project/>
+  <Overview>A test container whose ExtraParams needs a shell to mean what it says.</Overview>
+  <Category/>
+  <WebUI/>
+  <TemplateURL/>
+  <Icon/>
+  <ExtraParams>--hostname $(hostname)</ExtraParams>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled>1700000000</DateInstalled>
+  <DonateText/>
+  <DonateLink/>
+  <Requires/>
+  <TailscaleStateDir/>
+</Container>

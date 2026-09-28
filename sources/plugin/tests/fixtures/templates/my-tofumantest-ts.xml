@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>tofumantest-ts</Name>
+  <Repository>busybox:latest</Repository>
+  <Registry/>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support/>
+  <Project/>
+  <Overview>A test container with Tailscale enabled.</Overview>
+  <Category/>
+  <WebUI/>
+  <TemplateURL/>
+  <Icon/>
+  <ExtraParams/>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled>1700000000</DateInstalled>
+  <DonateText/>
+  <DonateLink/>
+  <Requires/>
+  <TailscaleEnabled>true</TailscaleEnabled>
+  <TailscaleHostname>tofumantest-ts</TailscaleHostname>
+  <TailscaleStateDir/>
+</Container>

@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>tofumantest-hand</Name>
+  <Repository>busybox:latest</Repository>
+  <Registry>https://hub.docker.com/_/busybox</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support/>
+  <Project/>
+  <Overview>A hand-made test container.&#13;
+Second line.</Overview>
+  <Category/>
+  <WebUI>http://[IP]:[PORT:8080]/</WebUI>
+  <TemplateURL/>
+  <Icon/>
+  <ExtraParams>--hostname hand --sysctl="net.ipv4.ip_local_port_range=1024 65000"</ExtraParams>
+  <PostArgs>sleep 3600</PostArgs>
+  <CPUset/>
+  <DateInstalled>1700000000</DateInstalled>
+  <DonateText/>
+  <DonateLink/>
+  <Requires/>
+  <Config Name="Config" Target="/config" Default="" Mode="rw" Description="" Type="Path" Display="always" Required="true" Mask="false">/mnt/tofumantest/appdata/hand</Config>
+  <Config Name="Web" Target="8080" Default="8080" Mode="tcp" Description="" Type="Port" Display="always" Required="true" Mask="false">18080</Config>
+  <Config Name="TZ" Target="TZ" Default="Etc/UTC" Mode="{3}" Description="" Type="Variable" Display="always" Required="false" Mask="false"/>
+  <Config Name="Secret" Target="SECRET" Default="" Mode="" Description="" Type="Variable" Display="always" Required="false" Mask="true">s3cr3t</Config>
+  <TailscaleStateDir/>
+</Container>

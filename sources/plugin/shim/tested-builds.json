@@ -1,0 +1,19 @@
+{
+    "builds": [
+        {
+            "name": "unraid-7.3.2",
+            "webgui": "369f0b2994584a6b6c8e6e570f5f86401d289234",
+            "files": {
+                "plugins/dynamix.docker.manager/include/DockerClient.php": "df6bda14817a2b1cd52cee4d7cf14a0e69272bef1be6aea73a692cce251a5826",
+                "plugins/dynamix.docker.manager/include/Helpers.php": "7a555667565ea568b62519081add1b602082c69efc560e86cb178eeb88814bf5",
+                "plugins/dynamix.docker.manager/scripts/docker": "eb6f9923cfd0ae4ce8128cbcce5fb0b92b7ded8b3b57a77e97b3d501a7fbbc08",
+                "plugins/dynamix/include/Markdown.php": "fb69d1741da8d40d1629cf4b339e56f49a6f017168567ff5456ae68a8ec0481b",
+                "plugins/dynamix/include/MarkdownExtra.inc.php": "7b3b04059efa49d973e93da80b33540f316b4780356c407b977284e2ce4afae3",
+                "plugins/dynamix/include/MarkdownExtra.php": "859115a229a9c2d1ef28a7a27e523b8756f3fdfbdc2108736508a01f1c354fbc",
+                "plugins/dynamix/include/MarkdownInterface.php": "bd9c314110fa08436659650a98d72960bddd26c0fe655e7a9c9059b378b75169",
+                "plugins/dynamix/include/Translations.php": "7e4befb98fe57a1d5ad70d9d54b9607d297f19292ad212680ed15b8cd049b26b",
+                "plugins/dynamix/include/Wrappers.php": "2726e4af417b2e9b386edcc5046e1e553284d95094c0be3faeadefa25f54b6a7"
+            }
+        }
+    ]
+}
