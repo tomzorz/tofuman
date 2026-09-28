@@ -30,6 +30,9 @@ final class Shim {
         'update' => $operations->update((string)$args['id'], $args['definition'], $caller),
         'delete' => $operations->delete((string)$args['id'], $caller),
         'adopt' => $operations->adopt((string)$args['name'], $caller),
+        'handMade' => $operations->handMade($caller),
+        'savePolicy' => $operations->savePolicy((string)($args['text'] ?? ''), $caller),
+        'tabState' => self::tabState($env, $operations, $caller),
         'recordRefusal' => $operations->recordRefusal((string)$args['mutation'], $args['id'] ?? null, (string)($args['name'] ?? ''), (string)$args['error'], $caller),
         'validatePolicy' => Policy::validate($args['policy'] ?? null),
         'initPolicy' => self::initPolicy($env),
@@ -58,6 +61,17 @@ final class Shim {
     }
     Json::write($env->policyFile(), Policy::defaults());
     return true;
+  }
+
+  /** Everything the tab shows, in one process: REQ-TAB-2, REQ-TAB-4, REQ-TAB-8, REQ-TAB-10, REQ-TAB-11. */
+  private static function tabState(Env $env, Operations $operations, array $caller): array {
+    return [
+      'managed' => $operations->list($caller),
+      'handMade' => $operations->handMade($caller),
+      'policy' => Policy::read($env->policyFile()),
+      'audit' => (new Audit($env->auditFile()))->tail(100),
+      'testedBuild' => self::testedBuild($env),
+    ];
   }
 
   /** REQ-TAB-11, and the hashes that go into tested-builds.json for a new Unraid release. */

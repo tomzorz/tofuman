@@ -12,6 +12,8 @@
 #   WEBGUI_TAG=7.3.2 ci/test.sh --server PORT  start the test server of the provider tests
 #                                              (REQ-TST-7) on 127.0.0.1:PORT, with the API key
 #                                              in TOFUMAN_TEST_API_KEY, and leave it running
+#   WEBGUI_TAG=7.3.2 ci/test.sh --tab PORT     serve a preview of the tab on 127.0.0.1:PORT,
+#                                              with seeded containers, until stopped
 set -eu
 if [ -d /boot/config/plugins/dockerMan ]; then
   echo "this looks like an Unraid server; the shim tests run on a disposable Docker host only" >&2
@@ -90,6 +92,12 @@ case "${1:-}" in
     # The server, the containers it creates, and the network stay up for the provider tests,
     # which remove them.
     trap - EXIT
+    ;;
+  --tab)
+    port=${2:?usage: ci/test.sh --tab PORT}
+    # not named tofumantest-: the seed removes those containers before it creates its own
+    in_image --rm --name tofuman-tab-preview -p "127.0.0.1:$port:8080" tofuman-shim-test \
+      sh -c 'php /plugin/tests/preview/seed.php && php -S 0.0.0.0:8080 /plugin/tests/preview/router.php'
     ;;
   *)
     run php /plugin/tests/run.php "$@"

@@ -170,8 +170,45 @@ final class Operations {
     });
   }
 
+  /** REQ-TAB-4: the DockerMan containers without a registry entry, which the tab offers to adopt. */
+  public function handMade(array $caller): array {
+    $this->requireAdmin($caller);
+    return $this->locked(function (): array {
+      [$registry, $containers] = $this->state();
+      $handMade = [];
+      foreach ($containers as $name => $container) {
+        if ($container['manager'] === 'dockerman' && $registry->idOf((string)$name) === null) {
+          $handMade[] = ['name' => (string)$name, 'running' => $container['running']];
+        }
+      }
+      return $handMade;
+    });
+  }
+
+  /**
+   * REQ-TAB-8 and REQ-TAB-9. The policy travels as text, so an empty object stays an object on
+   * its way through PHP.
+   */
+  public function savePolicy(string $text, array $caller): array {
+    $this->requireAdmin($caller); // REQ-POL-8
+    try {
+      $policy = json_decode($text, true, 64, JSON_THROW_ON_ERROR);
+    } catch (\JsonException $e) {
+      throw new Refusal(["the policy is not JSON: {$e->getMessage()}"]);
+    }
+    $errors = Policy::validate($policy);
+    if ($errors) {
+      throw new Refusal($errors);
+    }
+    return $this->locked(function () use ($text): array {
+      Json::write($this->env->policyFile(), json_decode($text, false, 64, JSON_THROW_ON_ERROR));
+      return Policy::read($this->env->policyFile());
+    });
+  }
+
   /** REQ-TAB-4 to REQ-TAB-7: registry entry and marker, and no recreate. */
   public function adopt(string $name, array $caller): array {
+    $this->requireAdmin($caller); // REQ-OWN-7: only a person in the tab adopts
     return $this->locked(function () use ($name, $caller): array {
       $id = null;
       try {
@@ -346,6 +383,13 @@ final class Operations {
       return new Failure($failure->step, "{$failure->getMessage()} The previous container {$previous['name']} is back.");
     } catch (Failure $restoreFailure) {
       return new Failure($failure->step, "{$failure->getMessage()} Putting back the previous container {$previous['name']} failed too: {$restoreFailure->getMessage()}");
+    }
+  }
+
+  /** The actions of the tab, which the API module never offers. */
+  private function requireAdmin(array $caller): void {
+    if (($caller['admin'] ?? false) !== true) {
+      throw new Refusal(['only an administrator in the tab can do this']);
     }
   }
 

@@ -173,6 +173,19 @@ function test_adopt_refuses_what_it_cannot_keep(): void {
   same(['adopt', 'refused'], [last_audit($env)['action'], last_audit($env)['result']]);
 }
 
+function test_the_tab_lists_hand_made_containers_and_only_an_administrator_adopts(): void {
+  $env = make_env();
+  write_policy($env);
+  $operations = new Operations($env);
+  $operations->create(definition(), caller());
+  hand_made('my-tofumantest-hand.xml', 'tofumantest-hand');
+  same([['name' => 'tofumantest-hand', 'running' => false]], $operations->handMade(caller(true)));
+  refuses(fn() => $operations->handMade(caller()), 'only an administrator');
+  refuses(fn() => $operations->adopt('tofumantest-hand', caller()), 'only an administrator');
+  $operations->adopt('tofumantest-hand', caller(true));
+  same([], $operations->handMade(caller(true)), 'an adopted container is still offered for adoption');
+}
+
 function test_a_gone_container_reads_as_absent_and_can_come_back(): void {
   $env = make_env();
   write_policy($env);

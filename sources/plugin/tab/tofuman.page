@@ -1,0 +1,144 @@
+Menu="Docker:2"
+Title="tofuman"
+Tag="code"
+Cond="is_file('/var/run/dockerd.pid')"
+Markdown="false"
+---
+<?php
+// SPDX-License-Identifier: GPL-2.0-or-later
+//
+// The tab (spec section 13). It reads and writes only through its own endpoint (REQ-TAB-13) and
+// leaves the stock pages alone (REQ-TAB-12).
+?>
+<style>
+#tofuman table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+#tofuman th, #tofuman td { text-align: left; padding: 4px 8px; border-bottom: 1px solid rgba(128, 128, 128, 0.3); vertical-align: top; }
+#tofuman .tofuman-mono, #tofuman textarea { font-family: monospace; }
+#tofuman textarea { width: 100%; min-height: 16em; box-sizing: border-box; }
+#tofuman .tofuman-warning { color: #d9534f; }
+#tofuman .tofuman-note { opacity: 0.8; }
+#tofuman ul.tofuman-errors { margin: 4px 0 12px 16px; }
+</style>
+
+<div id="tofuman">
+  <p id="tofuman-build" class="tofuman-note">Loading.</p>
+
+  <h3>Managed containers</h3>
+  <table>
+    <thead><tr><th>Name</th><th>Managed ID</th><th>Last mutation (UTC)</th><th>Changed since then</th><th>Running</th></tr></thead>
+    <tbody id="tofuman-managed"></tbody>
+  </table>
+
+  <h3>Hand-made containers</h3>
+  <p class="tofuman-note">Adopt records a container in the registry and writes the marker into its template, without a recreate. tofu can then import it by its name.</p>
+  <table>
+    <thead><tr><th>Name</th><th>Running</th><th></th></tr></thead>
+    <tbody id="tofuman-hand-made"></tbody>
+  </table>
+
+  <h3>Policy</h3>
+  <p class="tofuman-note">What a mutation may put into a template. An API key works only when its ID is on keyAllowlist; a refused request shows the ID of its key in the audit log below.</p>
+  <textarea id="tofuman-policy" spellcheck="false"></textarea>
+  <ul id="tofuman-policy-errors" class="tofuman-errors tofuman-warning"></ul>
+  <input type="button" id="tofuman-save" value="Save policy">
+  <span id="tofuman-saved" class="tofuman-note"></span>
+
+  <h3>Audit log</h3>
+  <table>
+    <thead><tr><th>Time (UTC)</th><th>Caller</th><th>Action</th><th>Name</th><th>Result</th><th>Error</th></tr></thead>
+    <tbody id="tofuman-audit"></tbody>
+  </table>
+</div>
+
+<script>
+(function () {
+  var endpoint = '/plugins/tofuman/include/endpoint.php';
+
+  function cell(value, mono) {
+    return $('<td>').text(value === null || value === undefined ? '' : String(value)).toggleClass('tofuman-mono', !!mono);
+  }
+
+  function utc(time) {
+    return time ? String(time).replace('T', ' ').replace('Z', '') : '';
+  }
+
+  function errors(list, target) {
+    target.empty();
+    $.each(list || [], function (_, error) { target.append($('<li>').text(error)); });
+  }
+
+  function failure(response) {
+    return (response && response.errors ? response.errors : ['no answer from the endpoint']).join('; ');
+  }
+
+  function render(state) {
+    var build = state.testedBuild.match;
+    $('#tofuman-build')
+      .text(build ? 'The webgui files match the tested build ' + build + '.' : 'The webgui files match no tested build. tofuman refuses every mutation and every adoption until a plugin update covers this Unraid release.')
+      .toggleClass('tofuman-warning', !build);
+
+    var managed = $('#tofuman-managed').empty();
+    $.each(state.managed, function (_, c) {
+      managed.append($('<tr>').append(cell(c.definition.name), cell(c.id, true), cell(utc(c.lastMutationAt)),
+        cell(c.changedSinceLastMutation ? 'yes' : 'no').toggleClass('tofuman-warning', c.changedSinceLastMutation), cell(c.running ? 'yes' : 'no')));
+    });
+    if (!state.managed.length) managed.append($('<tr>').append(cell('None yet.').attr('colspan', 5)));
+
+    var handMade = $('#tofuman-hand-made').empty();
+    $.each(state.handMade, function (_, c) {
+      var adopt = $('<input type="button" value="Adopt">').data('name', c.name).addClass('tofuman-adopt');
+      handMade.append($('<tr>').append(cell(c.name), cell(c.running ? 'yes' : 'no'), $('<td>').append(adopt)));
+    });
+    if (!state.handMade.length) handMade.append($('<tr>').append(cell('None.').attr('colspan', 3)));
+
+    // an unsaved edit keeps its text and its errors
+    if (!$('#tofuman-policy').data('edited')) {
+      $('#tofuman-policy').val(state.policy.text || '');
+      errors(state.policy.errors, $('#tofuman-policy-errors'));
+    }
+
+    var audit = $('#tofuman-audit').empty();
+    $.each(state.audit.slice().reverse(), function (_, line) {
+      var caller = line.callerName && line.callerName !== line.caller ? line.caller + ' (' + line.callerName + ')' : line.caller;
+      audit.append($('<tr>').append(cell(utc(line.time)), cell(caller, true),
+        cell(line.action), cell(line.name), cell(line.result).toggleClass('tofuman-warning', line.result !== 'succeeded'), cell(line.error)));
+    });
+    if (!state.audit.length) audit.append($('<tr>').append(cell('Empty.').attr('colspan', 6)));
+  }
+
+  function load() {
+    $.getJSON(endpoint, {action: 'state'}).done(function (response) {
+      if (response.ok) render(response.result);
+      else $('#tofuman-build').text('The tab could not read the state: ' + failure(response)).addClass('tofuman-warning');
+    }).fail(function (xhr) {
+      $('#tofuman-build').text('The endpoint answered HTTP ' + xhr.status + '.').addClass('tofuman-warning');
+    });
+  }
+
+  $('#tofuman-policy').on('input', function () { $(this).data('edited', true); $('#tofuman-saved').text(''); });
+
+  $('#tofuman-save').on('click', function () {
+    $.post(endpoint, {action: 'savePolicy', text: $('#tofuman-policy').val()}, null, 'json').done(function (response) {
+      if (response.ok) {
+        $('#tofuman-policy').data('edited', false).val(response.result.text);
+        errors(response.result.errors, $('#tofuman-policy-errors'));
+        $('#tofuman-saved').text('Saved.');
+      } else {
+        errors(response.errors, $('#tofuman-policy-errors'));
+        $('#tofuman-saved').text('Not saved.');
+      }
+    });
+  });
+
+  $('#tofuman-hand-made').on('click', '.tofuman-adopt', function () {
+    var name = $(this).data('name');
+    if (!window.confirm('Adopt ' + name + '? tofuman records it in its registry and writes the marker into its template. The container keeps running as it is.')) return;
+    $.post(endpoint, {action: 'adopt', name: name}, null, 'json').done(function (response) {
+      if (!response.ok) window.alert('tofuman did not adopt ' + name + ': ' + failure(response));
+      load();
+    });
+  });
+
+  load();
+})();
+</script>

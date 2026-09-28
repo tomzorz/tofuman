@@ -199,6 +199,20 @@ function test_tested_build_covers_the_loaded_files(): void {
   }
 }
 
+function test_the_tab_saves_only_a_valid_policy(): void {
+  $env = make_env();
+  $operations = new Tofuman\Operations($env);
+  same(['text' => null, 'errors' => ["the policy {$env->policyFile()} does not exist"]], Tofuman\Policy::read($env->policyFile()));
+  $text = '{"version": 1, "keyAllowlist": ["' . CALLER_ID . '"], "bindRoots": ["/mnt/user/appdata/"], "networks": ["bridge"], "extraParamFlags": [], "exceptions": {}}';
+  $saved = $operations->savePolicy($text, caller(true));
+  same([], $saved['errors']);
+  check(str_contains((string)$saved['text'], '"exceptions": {}'), "an empty exceptions object came back as something else: {$saved['text']}");
+  refuses(fn() => $operations->savePolicy('{"version": 2}', caller(true)), 'version must be 1');
+  refuses(fn() => $operations->savePolicy('{nope', caller(true)), 'not JSON');
+  refuses(fn() => $operations->savePolicy($text, caller()), 'only an administrator');
+  same($saved, Tofuman\Policy::read($env->policyFile()), 'a refused save changed the policy');
+}
+
 function test_shim_speaks_json_on_stdin_and_stdout(): void {
   $env = make_env();
   $ask = function (array $request) use ($env): array {
@@ -214,6 +228,9 @@ function test_shim_speaks_json_on_stdin_and_stdout(): void {
   };
   same(['ok' => true, 'result' => true], $ask(['action' => 'initPolicy']));
   same(['ok' => true, 'result' => false], $ask(['action' => 'initPolicy']), 'a second init');
+  $state = $ask(['action' => 'tabState', 'caller' => caller(true)]);
+  same(['managed', 'handMade', 'policy', 'audit', 'testedBuild'], array_keys($state['result'] ?? []), 'the parts of the tab state');
+  same([], $state['result']['policy']['errors'], 'the default policy');
   same(['ok' => true, 'result' => []], $ask(['action' => 'list', 'caller' => caller(true)]));
   same(['ok' => false, 'refused' => true, 'errors' => ['the caller x is not on the key allowlist']], $ask(['action' => 'list', 'caller' => ['id' => 'x', 'name' => 'stranger', 'admin' => false]]));
   same(['ok' => true, 'result' => []], $ask(['action' => 'validatePolicy', 'args' => ['policy' => Tofuman\Json::read($env->policyFile())]]));

@@ -27,6 +27,20 @@ final class Policy {
     return new self($policy);
   }
 
+  /** What the tab shows: the text of the policy file, and why it is invalid, if it is. */
+  public static function read(string $path): array {
+    if (!is_file($path)) {
+      return ['text' => null, 'errors' => ["the policy $path does not exist"]];
+    }
+    $text = (string)file_get_contents($path);
+    try {
+      $policy = json_decode($text, true, 64, JSON_THROW_ON_ERROR);
+    } catch (\JsonException $e) {
+      return ['text' => $text, 'errors' => ["the policy is not JSON: {$e->getMessage()}"]];
+    }
+    return ['text' => $text, 'errors' => self::validate($policy)];
+  }
+
   /** The checks the tab runs before it saves a policy (REQ-TAB-9), and the ones load() runs. */
   public static function validate(mixed $p): array {
     if (!is_array($p) || ($p !== [] && array_is_list($p))) {
