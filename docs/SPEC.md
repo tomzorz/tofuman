@@ -415,6 +415,8 @@ Configuration of the provider:
 | `insecure` | `TOFUMAN_INSECURE` | no | false |
 | `operation_timeout` | `TOFUMAN_OPERATION_TIMEOUT` | no | `30m` |
 
+`endpoint` is the base URL of the server, for example `https://192.0.2.10`. The provider sends each request to the path `/graphql` under `endpoint`, with the API key in the header `x-api-key`. `ca_certificate` holds PEM text. `operation_timeout` takes a duration such as `90s`, `30m`, or `1h`.
+
 ## 15. GraphQL interface
 
 The API module adds this schema to unraid-api. Each field of the schema carries the guard of REQ-AUTH-1.
@@ -633,6 +635,7 @@ How an API module stays installed across a reboot is undocumented. `unraid-api p
 - REQ-TST-6: The API module tests MUST run the real shim, and MUST NOT use mocks.
 - REQ-TST-7: The provider tests MUST run against a test server that serves the schema of section 15. The test server MUST use the real API module service and the real shim, on the Docker of the test runner.
 - REQ-TST-8: Before each release, a person MUST run the end-to-end procedure of this section on a server.
+- REQ-TST-9: The provider tests MUST run the `tofu` binary of one pinned OpenTofu release (spike 4).
 
 End-to-end procedure. Preconditions: the plugin is installed on the server, an API key with only `DOCKER:CREATE_ANY` is on the key allowlist, and a directory for throwaway containers exists under a bind root.
 
@@ -655,6 +658,7 @@ If a step fails, keep the throwaway containers, copy the audit log, and do not r
 - Spike 1, 2026-09-28, **go** ([`spikes/2026-09-28-dockerman-helpers-off-unraid`](../spikes/2026-09-28-dockerman-helpers-off-unraid/README.md)): the DockerMan helpers load in `php-cli` with `_var()` and four globals stubbed. 17 of 17 real templates are a fixed point of `xmlToVar`, `postToXML`, `xmlToVar`. 16 of 17 generated commands created a matching container on a plain Docker host, and the 17th needs the nvidia runtime.
 - Spike 2, open: find an install route for the API module that survives a reboot and an update of Unraid OS (REQ-PKG-2, REQ-PKG-3). A person runs spike 2 on a server. The candidate route: at each boot, the `.plg` file copies the API module into `node_modules`, adds it to `peerDependencies` and to `api.json`, and runs `rc.unraid-api archive-dependencies`.
 - Spike 3, open: find out whether a stylesheet with `:has()` on `input.autostart[container=NAME]` can mark managed containers in the stock container table (deferred, section 21).
+- Spike 4, 2026-09-28, **go** ([`spikes/2026-09-28-plugin-testing-on-opentofu`](../spikes/2026-09-28-plugin-testing-on-opentofu/README.md)): terraform-plugin-testing runs OpenTofu 1.12.6 through a create, an import by name, an update in place, and a read that drops a vanished resource. The run needs `TF_ACC_PROVIDER_HOST=registry.opentofu.org` and `TF_ACC_PROVIDER_NAMESPACE`, and without them `tofu init` fails.
 
 ## 20. Open items
 
