@@ -52,15 +52,15 @@ run php /plugin/tests/run.php "$@"
 
 # The API module: built on this host against @unraid/shared from source, its schema checked
 # here, its service tested in the container against the real shim.
-tarball=$(sh "$plugin/api/ci/unraid-shared.sh" "$work")
+shared=$(sh "$plugin/api/ci/unraid-shared.sh" "$work")
 (
   cd "$plugin/api"
   npm ci --no-audit --no-fund --loglevel=error
   # unraid-api ships @unraid/shared inside its own node_modules, and so do the tests. npm would
   # not install it: it is a peer, and .npmrc leaves peers alone.
   rm -rf node_modules/@unraid/shared
-  mkdir -p node_modules/@unraid/shared
-  tar -xzf "$tarball" -C node_modules/@unraid/shared --strip-components=1
+  mkdir -p node_modules/@unraid
+  cp -r "$shared" node_modules/@unraid/shared
   npm run --silent build:test
   node --test build/test/schema.test.js
 )
