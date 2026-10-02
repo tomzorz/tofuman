@@ -22,8 +22,8 @@ if ($path === '/plugins/tofuman/include/endpoint.php') {
 }
 
 if (str_starts_with($path, '/webGui/')) {
-  $file = realpath('/webgui/emhttp' . $path); // webGui is a link to plugins/dynamix
-  if ($file === false || !str_starts_with($file, '/webgui/emhttp/')) {
+  $file = realpath('/usr/local/emhttp' . $path); // webGui is a link to plugins/dynamix
+  if ($file === false || !str_starts_with($file, '/usr/local/emhttp/')) {
     http_response_code(404);
     return;
   }

@@ -12,7 +12,8 @@
                 "plugins/dynamix/include/MarkdownExtra.php": "859115a229a9c2d1ef28a7a27e523b8756f3fdfbdc2108736508a01f1c354fbc",
                 "plugins/dynamix/include/MarkdownInterface.php": "bd9c314110fa08436659650a98d72960bddd26c0fe655e7a9c9059b378b75169",
                 "plugins/dynamix/include/Translations.php": "7e4befb98fe57a1d5ad70d9d54b9607d297f19292ad212680ed15b8cd049b26b",
-                "plugins/dynamix/include/Wrappers.php": "2726e4af417b2e9b386edcc5046e1e553284d95094c0be3faeadefa25f54b6a7"
+                "plugins/dynamix/include/Wrappers.php": "2726e4af417b2e9b386edcc5046e1e553284d95094c0be3faeadefa25f54b6a7",
+                "plugins/dynamix/include/local_prepend.php": "4c63145cee0103386de7efb6fde065518d070ef60498f0fd74ed71895e0693fa"
             }
         }
     ]

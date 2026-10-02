@@ -12,7 +12,7 @@ ini_set('display_errors', 'stderr');
 error_reporting(E_ALL);
 ob_start(); // webgui code can echo; stdout belongs to the JSON response
 
-$docroot = getenv('TOFUMAN_DOCROOT') ?: '/usr/local/emhttp';
+$docroot = '/usr/local/emhttp';
 require_once "$docroot/webGui/include/Wrappers.php";
 extract(parse_plugin_cfg('dynamix', true));
 $_SERVER['REQUEST_URI'] = '';

@@ -9,7 +9,6 @@ use Tofuman\Env;
 
 function tab_request(Env $env, string $method, array $params): array {
   $environment = getenv() + [
-    'TOFUMAN_SHIM' => dirname(__DIR__) . '/shim/tofuman-shim.php',
     'TOFUMAN_DATA_DIR' => $env->dataDir,
     'TOFUMAN_LOCK' => $env->lockFile,
   ];

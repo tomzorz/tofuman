@@ -5,3 +5,6 @@
 FROM php:8.3-cli
 COPY --from=docker:cli /usr/local/bin/docker /usr/bin/docker
 COPY --from=node:22-bookworm-slim /usr/local/bin/node /usr/local/bin/node
+# Unraid's php.ini prepends this webgui file to every PHP run, the CLI included, so the shim
+# loads it on a server. ci/test.sh mounts the webgui where the path points (REQ-TST-10).
+RUN echo 'auto_prepend_file="/usr/local/emhttp/webGui/include/local_prepend.php"' > "$PHP_INI_DIR/conf.d/unraid.ini"

@@ -3,9 +3,9 @@
 #
 # Runs the tests of the plugin against the webgui source at one tag, on the Docker of this
 # host: the shim in php-cli (REQ-TST-2 to REQ-TST-5), then the API module against the real
-# shim (REQ-TST-6). It creates and removes containers whose names start with tofumantest-,
-# so it runs on a disposable Docker host only, never on an Unraid server. The host needs git,
-# node, and npm.
+# shim (REQ-TST-6). The container lays the files out as a server does (REQ-TST-10). It creates
+# and removes containers whose names start with tofumantest-, so it runs on a disposable Docker
+# host only, never on an Unraid server. The host needs git, node, and npm.
 #
 #   WEBGUI_TAG=7.3.2 ci/test.sh [filter]       run the tests, optionally only matching ones
 #   WEBGUI_TAG=7.3.2 ci/test.sh --hashes       print the files and hashes for tested-builds.json
@@ -24,9 +24,12 @@ plugin=$(cd "$here/.." && pwd)
 tag=${WEBGUI_TAG:-7.3.2}
 work=${TOFUMAN_WORK:-$plugin/.work}
 network=tofumantest0
+# where a server keeps the plugin, inside the docroot
+p=/usr/local/emhttp/plugins/tofuman
 
 mkdir -p "$work/mnt"
 [ -d "$work/webgui-$tag" ] || git clone -q --depth 1 --branch "$tag" https://github.com/unraid/webgui.git "$work/webgui-$tag"
+mkdir -p "$work/webgui-$tag/emhttp/plugins/tofuman" # the mount point of the plugin, inside the read-only docroot
 docker build -q -t tofuman-shim-test -f "$here/Dockerfile.test" "$here" >/dev/null
 docker network inspect $network >/dev/null 2>&1 || docker network create -d macvlan --subnet 192.0.2.0/24 --gateway 192.0.2.1 $network >/dev/null
 
@@ -36,18 +39,16 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# docker run in the test image, with the shim, the webgui source, and the Docker of this host;
-# the arguments are further docker run options, the image, and the command
+# docker run in the test image, with the webgui and the plugin where a server has them, and the
+# Docker of this host; the arguments are further docker run options, the image, and the command
 in_image() {
   docker run \
     -v /var/run/docker.sock:/var/run/docker.sock \
-    -v "$plugin:/plugin:ro" \
-    -v "$work/webgui-$tag:/webgui:ro" \
+    -v "$work/webgui-$tag/emhttp:/usr/local/emhttp:ro" \
+    -v "$plugin:$p:ro" \
     -v "$work/mnt:/mnt/tofumantest" \
-    -e TOFUMAN_DOCROOT=/webgui/emhttp \
-    -e TOFUMAN_VAR_INI=/plugin/tests/fixtures/var.ini \
+    -e TOFUMAN_VAR_INI=$p/tests/fixtures/var.ini \
     -e TOFUMAN_TEST_NETWORK=$network \
-    -e TOFUMAN_SHIM=/plugin/shim/tofuman-shim.php \
     "$@"
 }
 
@@ -72,14 +73,14 @@ build_api() {
 
 case "${1:-}" in
   --hashes)
-    echo '{"action":"testedBuild"}' | run php /plugin/shim/tofuman-shim.php
+    echo '{"action":"testedBuild"}' | run php $p/shim/tofuman-shim.php
     ;;
   --server)
     port=${2:?usage: ci/test.sh --server PORT}
     : "${TOFUMAN_TEST_API_KEY:?the test server needs TOFUMAN_TEST_API_KEY}"
     build_api
     docker rm -f tofumantest-server >/dev/null 2>&1 || true
-    in_image -d --name tofumantest-server -p "127.0.0.1:$port:8931" -e TOFUMAN_TEST_API_KEY tofuman-shim-test node /plugin/api/build/test/server.js >/dev/null
+    in_image -d --name tofumantest-server -p "127.0.0.1:$port:8931" -e TOFUMAN_TEST_API_KEY tofuman-shim-test node $p/api/build/test/server.js >/dev/null
     tries=0
     until docker exec tofumantest-server node -e "fetch('http://127.0.0.1:8931/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))" 2>/dev/null; do
       tries=$((tries + 1))
@@ -97,12 +98,12 @@ case "${1:-}" in
     port=${2:?usage: ci/test.sh --tab PORT}
     # not named tofumantest-: the seed removes those containers before it creates its own
     in_image --rm --name tofuman-tab-preview -p "127.0.0.1:$port:8080" tofuman-shim-test \
-      sh -c 'php /plugin/tests/preview/seed.php && php -S 0.0.0.0:8080 /plugin/tests/preview/router.php'
+      sh -c "php $p/tests/preview/seed.php && php -S 0.0.0.0:8080 $p/tests/preview/router.php"
     ;;
   *)
-    run php /plugin/tests/run.php "$@"
+    run php $p/tests/run.php "$@"
     build_api
     (cd "$plugin/api" && node --test build/test/schema.test.js build/test/module.test.js)
-    run node --test /plugin/api/build/test/service.test.js
+    run node --test $p/api/build/test/service.test.js
     ;;
 esac

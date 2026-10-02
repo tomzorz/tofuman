@@ -14,13 +14,20 @@ final class TestedBuild {
   /** Not loaded, but every create runs through it. */
   public const DOCKER_SCRIPT = 'plugins/dynamix.docker.manager/scripts/docker';
 
-  /** @return array<string, string> path under the docroot => SHA-256 of the file */
+  /**
+   * The webgui files in this process: everything loaded from under the docroot except the
+   * plugin's own files, which live there too on a server. On Unraid that includes
+   * local_prepend.php, which php.ini prepends to every run.
+   *
+   * @return array<string, string> path under the docroot => SHA-256 of the file
+   */
   public static function current(string $docroot): array {
     global $tofumanLoadedFiles;
     $root = rtrim(realpath($docroot) ?: $docroot, '/') . '/';
+    $own = rtrim(realpath(dirname(__DIR__, 2)) ?: dirname(__DIR__, 2), '/') . '/';
     $files = [];
     foreach ($tofumanLoadedFiles as $file) {
-      if (str_starts_with($file, $root)) {
+      if (str_starts_with($file, $root) && !str_starts_with($file, $own)) {
         $files[substr($file, strlen($root))] = hash_file('sha256', $file);
       }
     }

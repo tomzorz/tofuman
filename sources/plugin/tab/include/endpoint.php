@@ -9,7 +9,7 @@
 declare(strict_types=1);
 
 function tofuman_shim(string $action, array $args): array {
-  $shim = getenv('TOFUMAN_SHIM') ?: '/usr/local/emhttp/plugins/tofuman/shim/tofuman-shim.php';
+  $shim = '/usr/local/emhttp/plugins/tofuman/shim/tofuman-shim.php';
   $request = json_encode(['action' => $action, 'args' => (object)$args, 'caller' => ['id' => 'webgui', 'name' => 'webgui', 'admin' => true]], JSON_THROW_ON_ERROR);
   $process = proc_open(['php', $shim], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
   if ($process === false) {

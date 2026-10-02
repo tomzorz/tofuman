@@ -12,7 +12,7 @@ export const adapter = 'nestjs';
 
 @Module({
   providers: [
-    { provide: TofumanService, useValue: new TofumanService(process.env['TOFUMAN_SHIM'] ?? DEFAULT_SHIM) },
+    { provide: TofumanService, useValue: new TofumanService(DEFAULT_SHIM) },
     TofumanRootResolver,
     TofumanQueryResolver,
     TofumanMutationResolver,

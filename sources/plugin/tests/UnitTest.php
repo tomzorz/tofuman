@@ -191,12 +191,17 @@ function test_registry_reconciles(): void {
   check(preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/', Registry::newId()) === 1, 'a managed ID is not a UUID v4');
 }
 
+/** REQ-UPG-2 in the layout of a server (REQ-TST-10), where the plugin lives inside the docroot. */
 function test_tested_build_covers_the_loaded_files(): void {
   global $docroot;
   $files = Tofuman\TestedBuild::current($docroot);
-  foreach (['plugins/dynamix.docker.manager/include/Helpers.php', 'plugins/dynamix.docker.manager/include/DockerClient.php', Tofuman\TestedBuild::DOCKER_SCRIPT] as $path) {
-    check(isset($files[$path]), "the tested build does not cover $path: " . implode(', ', array_keys($files)));
+  $paths = implode(', ', array_keys($files));
+  // local_prepend.php comes from php.ini's auto_prepend_file, as on Unraid
+  foreach (['plugins/dynamix.docker.manager/include/Helpers.php', 'plugins/dynamix.docker.manager/include/DockerClient.php', 'plugins/dynamix/include/local_prepend.php', Tofuman\TestedBuild::DOCKER_SCRIPT] as $path) {
+    check(isset($files[$path]), "the tested build does not cover $path: $paths");
   }
+  check(str_starts_with(realpath(__DIR__) ?: '', realpath($docroot) . '/'), 'the tests do not run inside the docroot, so they cannot see the layout of a server');
+  check(!array_filter(array_keys($files), fn(string $path) => str_starts_with($path, 'plugins/tofuman/')), "the plugin's own files count as webgui files: $paths");
 }
 
 function test_the_load_record_tells_whether_unraid_api_loaded_the_module(): void {

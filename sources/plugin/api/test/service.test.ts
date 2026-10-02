@@ -21,7 +21,7 @@ const STRANGER: Caller = { id: '22222222-2222-4222-8222-222222222222', name: 'st
 const NETWORK = process.env['TOFUMAN_TEST_NETWORK'] ?? 'bridge';
 
 function service(): TofumanService {
-  return new TofumanService(process.env['TOFUMAN_SHIM'] ?? DEFAULT_SHIM);
+  return new TofumanService(DEFAULT_SHIM);
 }
 
 function entry(type: TofumanConfigType, target: string, value: string, mode = ''): ConfigEntry {

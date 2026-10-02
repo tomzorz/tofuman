@@ -654,6 +654,8 @@ Releases (decided 2026-09-28):
 - REQ-TST-7: The provider tests MUST run against a test server that serves the schema of section 15. The test server MUST use the real API module service and the real shim, on the Docker of the test runner.
 - REQ-TST-8: Before each release, a person MUST run the end-to-end procedure of this section on a server.
 - REQ-TST-9: The provider tests MUST run the `tofu` binary of one pinned OpenTofu release (spike 4).
+- REQ-TST-10: The shim tests MUST load the webgui from `/usr/local/emhttp` and the plugin from `/usr/local/emhttp/plugins/tofuman`, as a server does.
+- REQ-TST-11: The PHP configuration of the shim tests MUST prepend `local_prepend.php` of the webgui to every run, as the PHP configuration of Unraid does. Reason: without REQ-TST-10 and REQ-TST-11, a tested build misses files that the shim loads on a server (spike 2).
 
 End-to-end procedure. Preconditions: the plugin is installed on the server, an API key with only `DOCKER:CREATE_ANY` is on the key allowlist, and a directory for throwaway containers exists under a bind root.
 
@@ -674,7 +676,7 @@ If a step fails, keep the throwaway containers, copy the audit log, and do not r
 ## 19. Spikes
 
 - Spike 1, 2026-09-28, **go** ([`spikes/2026-09-28-dockerman-helpers-off-unraid`](../spikes/2026-09-28-dockerman-helpers-off-unraid/README.md)): the DockerMan helpers load in `php-cli` with `_var()` and four globals stubbed. 17 of 17 real templates are a fixed point of `xmlToVar`, `postToXML`, `xmlToVar`. 16 of 17 generated commands created a matching container on a plain Docker host, and the 17th needs the nvidia runtime.
-- Spike 2, open: check on a server that the install route of REQ-PKG-10 to REQ-PKG-14 meets REQ-PKG-2 and REQ-PKG-3. A person runs spike 2 on NewIntersect, with a written rollback (decided 2026-09-28). Read in the code 2026-09-28: the load conditions and the restore at each start of section 17. A plugin that fails to import leaves unraid-api running and raises an alert notification.
+- Spike 2, open: check on a server that the install route of REQ-PKG-10 to REQ-PKG-14 meets REQ-PKG-2 and REQ-PKG-3. A person runs spike 2 on NewIntersect, with a written rollback (decided 2026-09-28). Read in the code 2026-09-28: the load conditions and the restore at each start of section 17. A plugin that fails to import leaves unraid-api running and raises an alert notification. On NewIntersect with Unraid 7.3.2 (2026-10-02), `vendor_archive.json` names an archive that does not exist, and unraid-api loaded the API module after the install. The tested build failed as a set, because the shim counted its own files and `local_prepend.php`, which the test layout never loaded (REQ-TST-10, REQ-TST-11). Every webgui file matched the tag `7.3.2` byte for byte.
 - Spike 3, open: find out whether a stylesheet with `:has()` on `input.autostart[container=NAME]` can mark managed containers in the stock container table (deferred, section 21).
 - Spike 4, 2026-09-28, **go** ([`spikes/2026-09-28-plugin-testing-on-opentofu`](../spikes/2026-09-28-plugin-testing-on-opentofu/README.md)): terraform-plugin-testing runs OpenTofu 1.12.6 through a create, an import by name, an update in place, and a read that drops a vanished resource. The run needs `TF_ACC_PROVIDER_HOST=registry.opentofu.org` and `TF_ACC_PROVIDER_NAMESPACE`, and without them `tofu init` fails.
 

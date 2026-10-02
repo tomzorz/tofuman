@@ -74,7 +74,7 @@ function resolve(type: GraphQLNamedType | null | undefined, resolvers: Record<st
   }
 }
 
-const service = new TofumanService(process.env['TOFUMAN_SHIM'] ?? DEFAULT_SHIM);
+const service = new TofumanService(DEFAULT_SHIM);
 const schema = await moduleSchema();
 resolve(schema.getQueryType(), { tofuman: () => ({}) });
 resolve(schema.getMutationType(), { tofuman: () => ({}) });
