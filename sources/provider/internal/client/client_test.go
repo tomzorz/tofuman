@@ -3,6 +3,7 @@
 package client
 
 import (
+	"encoding/json"
 	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
@@ -41,6 +42,22 @@ func TestTransportTrustsOnlyWhatItIsTold(t *testing.T) {
 	}
 	if _, err := Transport("not a certificate", false); err == nil {
 		t.Error("ca_certificate without PEM was accepted")
+	}
+}
+
+// unraid-api answered the first mutation on a server with only "Bad Request Exception" in the
+// message; the properties that its ValidationPipe rejected sit in extensions.originalError.
+func TestErrorKeepsTheDetailsOfAnException(t *testing.T) {
+	var answer struct {
+		Errors []graphQLError `json:"errors"`
+	}
+	body := `{"errors":[{"message":"Bad Request Exception","extensions":{"code":"BAD_REQUEST","originalError":{"message":["property name should not exist","property repository should not exist"],"error":"Bad Request","statusCode":400}}}]}`
+	if err := json.Unmarshal([]byte(body), &answer); err != nil {
+		t.Fatal(err)
+	}
+	got := errorFrom(answer.Errors).Error()
+	if !strings.Contains(got, "property name should not exist") || !strings.Contains(got, "property repository should not exist") {
+		t.Errorf("the details of the exception are lost: %q", got)
 	}
 }
 

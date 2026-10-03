@@ -114,8 +114,9 @@ func (e *Error) Refused() bool {
 type graphQLError struct {
 	Message    string `json:"message"`
 	Extensions struct {
-		Code   string   `json:"code"`
-		Errors []string `json:"errors"`
+		Code          string          `json:"code"`
+		Errors        []string        `json:"errors"`
+		OriginalError json.RawMessage `json:"originalError"`
 	} `json:"extensions"`
 }
 
@@ -163,10 +164,34 @@ func (c *Client) do(ctx context.Context, query string, variables map[string]any,
 func errorFrom(errs []graphQLError) *Error {
 	first := errs[0]
 	result := &Error{Message: first.Message, Code: first.Extensions.Code, Checks: first.Extensions.Errors}
+	if details := originalDetails(first.Extensions.OriginalError, first.Message); len(details) > 0 && len(result.Checks) == 0 {
+		result.Message += ": " + strings.Join(details, "; ")
+	}
 	for _, other := range errs[1:] {
 		result.Message += "; " + other.Message
 	}
 	return result
+}
+
+// originalDetails reads what NestJS puts into extensions.originalError: the message of the
+// exception it caught, a string or a list. A ValidationPipe lists each property it rejected,
+// while the top message only says "Bad Request Exception".
+func originalDetails(raw json.RawMessage, top string) []string {
+	var original struct {
+		Message json.RawMessage `json:"message"`
+	}
+	if len(raw) == 0 || json.Unmarshal(raw, &original) != nil || len(original.Message) == 0 {
+		return nil
+	}
+	var list []string
+	if json.Unmarshal(original.Message, &list) == nil {
+		return list
+	}
+	var text string
+	if json.Unmarshal(original.Message, &text) == nil && text != "" && text != top {
+		return []string{text}
+	}
+	return nil
 }
 
 func snippet(raw []byte) string {
