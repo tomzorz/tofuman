@@ -10,6 +10,7 @@ import { AuthAction, Resource, UsePermissions } from '@unraid/shared/use-permiss
 import { callerFrom } from './caller.js';
 import { TofumanContainer, TofumanDefinitionInput, TofumanMutation, TofumanOperation, TofumanQuery } from './model.js';
 import { TofumanService } from './service.js';
+import { parseDefinition } from './shapes.js';
 
 /** DOCKER:CREATE_ANY, which no official handler of unraid-api uses (spec section 8). */
 const PERMISSION = { action: AuthAction.CREATE_ANY, resource: Resource.DOCKER };
@@ -56,24 +57,28 @@ export class TofumanQueryResolver {
   }
 }
 
+// The definition arrives as `unknown`, not as TofumanDefinitionInput. unraid-api runs a global
+// ValidationPipe with whitelist and forbidNonWhitelisted, which rejects every field of an input
+// class that has no class-validator decorators, and leaves arguments that are not classes alone.
+// The shim validates the definition (spec section 6).
 @Resolver(() => TofumanMutation)
 export class TofumanMutationResolver {
   constructor(private readonly service: TofumanService) {}
 
   @ResolveField(() => TofumanOperation)
   @UsePermissions(PERMISSION)
-  createContainer(@Args('definition', { type: () => TofumanDefinitionInput }) definition: TofumanDefinitionInput, @Context() context: unknown): Promise<TofumanOperation> {
-    return this.service.create(definition, callerFrom(context));
+  createContainer(@Args('definition', { type: () => TofumanDefinitionInput }) definition: unknown, @Context() context: unknown): Promise<TofumanOperation> {
+    return this.service.create(parseDefinition(definition), callerFrom(context));
   }
 
   @ResolveField(() => TofumanOperation)
   @UsePermissions(PERMISSION)
   updateContainer(
     @Args('id', { type: () => ID }) id: string,
-    @Args('definition', { type: () => TofumanDefinitionInput }) definition: TofumanDefinitionInput,
+    @Args('definition', { type: () => TofumanDefinitionInput }) definition: unknown,
     @Context() context: unknown,
   ): Promise<TofumanOperation> {
-    return this.service.update(id, definition, callerFrom(context));
+    return this.service.update(id, parseDefinition(definition), callerFrom(context));
   }
 
   @ResolveField(() => TofumanOperation)
