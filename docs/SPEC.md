@@ -146,7 +146,7 @@ Version 1 leaves the following items out of scope:
 
 The provider reaches DockerMan through unraid-api, in these steps:
 
-1. The provider sends GraphQL requests over HTTPS to the path `/graphql` on the server, with an API key.
+1. The provider sends GraphQL requests over HTTPS or HTTP to the path `/graphql` on the server, with an API key. Over HTTP, the API key crosses the network in plain text.
 2. unraid-api authenticates the API key, and then passes each tofuman request to the API module.
 3. For each read or write of templates and containers, the API module runs the shim with JSON on standard input and standard output.
 4. The shim loads `Helpers.php` and `DockerClient.php` from DockerMan, and uses `xmlToVar`, `postToXML`, and `xmlToCommand`.
@@ -672,6 +672,8 @@ End-to-end procedure. Preconditions: the plugin is installed on the server, an A
 11. Check that the audit log shows each mutation and the adoption.
 
 If a step fails, keep the throwaway containers, copy the audit log, and do not release.
+
+The PowerShell 7 script `sources/provider/e2e/e2e.ps1` runs the tofu steps of this procedure, checks the outcome of each step, and waits for the steps in the webgui. A person runs it with the API key in the environment, so the key never reaches an agent.
 
 ## 19. Spikes
 
