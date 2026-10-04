@@ -8,146 +8,493 @@ Markdown="false"
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
 // The tab (spec section 13). It reads and writes only through its own endpoint (REQ-TAB-13) and
-// leaves the stock pages alone (REQ-TAB-12).
+// leaves the stock pages alone (REQ-TAB-12): the one thing it puts on the Docker page is the
+// stylesheet of the badge (section 13.1), which the webgui renders with every tab of that page.
 ?>
+<link type="text/css" rel="stylesheet" href="/plugins/tofuman/include/endpoint.php?action=badges">
 <style>
-#tofuman table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
-#tofuman th, #tofuman td { text-align: left; padding: 4px 8px; border-bottom: 1px solid rgba(128, 128, 128, 0.3); vertical-align: top; }
-#tofuman .tofuman-mono, #tofuman textarea { font-family: monospace; }
-#tofuman textarea { width: 100%; min-height: 16em; box-sizing: border-box; }
-#tofuman .tofuman-warning { color: #d9534f; }
-#tofuman .tofuman-note { opacity: 0.8; }
-#tofuman ul.tofuman-errors { margin: 4px 0 12px 16px; }
+#tofuman { margin-top: 6px; }
+#tofuman .tofuman-status { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 22px; margin: 6px 0 4px; }
+#tofuman .tofuman-status i.fa, #tofuman .tofuman-heading i.fa, #tofuman .tofuman-running i.fa { margin-right: 6px; }
+#tofuman .tofuman-status a { margin-left: auto; }
+#tofuman .tofuman-week { opacity: 0.8; margin-bottom: 4px; }
+#tofuman .tofuman-running { margin: 8px 0; padding: 6px 10px; border-left: 3px solid var(--blue-800); }
+#tofuman .tofuman-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 24px 0 6px; font-size: 1.6rem; font-weight: bold; }
+#tofuman .tofuman-heading .tofuman-count { font-weight: normal; opacity: 0.7; }
+#tofuman .tofuman-heading input[type=button] { margin: 0; }
+#tofuman .tofuman-note { opacity: 0.8; margin: 4px 0 8px; }
+#tofuman .tofuman-ct { display: flex; align-items: center; gap: 10px; }
+#tofuman .tofuman-ct img, #tofuman .tofuman-ct > i.fa { width: 30px; height: 30px; font-size: 26px; line-height: 30px; text-align: center; object-fit: contain; flex: none; }
+#tofuman .tofuman-ct .tofuman-name { font-weight: bold; }
+#tofuman .tofuman-ct .tofuman-state { font-size: 1.1rem; opacity: 0.85; }
+#tofuman .tofuman-ct .tofuman-state i.fa { margin-right: 4px; font-size: 0.9rem; }
+#tofuman .tofuman-ct a.tofuman-webui { margin-left: 6px; }
+#tofuman table.tofuman-table td.tofuman-wrap { white-space: normal; line-height: 1.5; height: auto; padding-top: 4px; padding-bottom: 4px; }
+#tofuman tr.tofuman-clickable { cursor: pointer; }
+#tofuman tr.tofuman-detail > td { white-space: normal; line-height: 1.5; height: auto; padding: 8px 12px 12px; }
+#tofuman .tofuman-mono, #tofuman textarea, #tofuman pre { font-family: monospace; }
+#tofuman textarea { width: 100%; box-sizing: border-box; }
+#tofuman #tofuman-policy { min-height: 18em; }
+#tofuman .tofuman-import textarea { min-height: 7em; }
+#tofuman pre { white-space: pre-wrap; word-break: break-all; margin: 4px 0; padding: 6px 8px; line-height: 1.4; background: var(--table-background-color); border: 1px solid var(--table-border-color); border-radius: 3px; }
+#tofuman ul.tofuman-list { margin: 2px 0 2px 16px; padding: 0; }
+#tofuman ul#tofuman-gaps { list-style: none; margin: 4px 0 8px; padding: 0; }
+#tofuman ul#tofuman-gaps li { line-height: 2.2rem; }
+#tofuman ul#tofuman-gaps .tofuman-why { opacity: 0.7; margin-left: 8px; }
+#tofuman table.tofuman-steps { width: auto; margin: 6px 0; }
+#tofuman table.tofuman-steps td { padding: 2px 16px 2px 0; height: auto; line-height: 1.6; vertical-align: top; white-space: normal; }
 </style>
 
 <div id="tofuman">
-  <p id="tofuman-build" class="tofuman-note">Loading.</p>
-  <p id="tofuman-api" class="tofuman-note"></p>
+  <div class="tofuman-status">
+    <span id="tofuman-build">Loading.</span>
+    <span id="tofuman-api"></span>
+    <span id="tofuman-keys"></span>
+    <span id="tofuman-plugin"></span>
+    <a href="/plugins/tofuman/include/endpoint.php?action=diagnostics" download title="Versions, the build check, policy, registry, audit log, and operations, without secrets: the file to hand over when something goes wrong"><i class="fa fa-download"></i>Diagnostics file</a>
+  </div>
+  <div id="tofuman-week" class="tofuman-week"></div>
+  <div id="tofuman-running" class="tofuman-running" style="display:none"></div>
 
-  <h3>Managed containers</h3>
-  <table>
-    <thead><tr><th>Name</th><th>Managed ID</th><th>Last mutation (UTC)</th><th>Changed since then</th><th>Running</th></tr></thead>
-    <tbody id="tofuman-managed"></tbody>
-  </table>
+  <div class="tofuman-heading">
+    <span><i class="fa fa-cubes"></i>Managed containers <span id="tofuman-managed-count" class="tofuman-count"></span></span>
+    <input type="button" id="tofuman-import-all" value="Import blocks for all">
+  </div>
+  <div id="tofuman-import" class="tofuman-import" style="display:none">
+    <p class="tofuman-note">Paste these into the configuration, then run <span class="tofuman-mono">tofu plan -generate-config-out=generated.tf</span> once to write the matching HCL.</p>
+    <textarea readonly spellcheck="false"></textarea>
+    <input type="button" class="tofuman-copy" value="Copy"> <span class="tofuman-note"></span>
+  </div>
+  <div class="TableContainer">
+    <table class="unraid tofuman-table">
+      <thead><tr><td>Container</td><td>Image</td><td>Network</td><td>Last mutation</td><td>Template</td><td>Managed ID</td><td></td></tr></thead>
+      <tbody id="tofuman-managed"></tbody>
+    </table>
+  </div>
 
-  <h3>Hand-made containers</h3>
+  <div class="tofuman-heading">
+    <span><i class="fa fa-wrench"></i>Hand-made containers <span id="tofuman-hand-made-count" class="tofuman-count"></span></span>
+    <input type="button" id="tofuman-adopt-selected" value="Adopt selected" disabled>
+  </div>
   <p class="tofuman-note">Adopt records a container in the registry and writes the marker into its template, without a recreate. tofu can then import it by its name.</p>
-  <table>
-    <thead><tr><th>Name</th><th>Running</th><th></th></tr></thead>
-    <tbody id="tofuman-hand-made"></tbody>
-  </table>
+  <div class="TableContainer">
+    <table class="unraid tofuman-table">
+      <thead><tr><td><input type="checkbox" id="tofuman-select-all" title="Select every container that is ready to adopt"></td><td>Container</td><td>Image</td><td>Adoption</td><td></td></tr></thead>
+      <tbody id="tofuman-hand-made"></tbody>
+    </table>
+  </div>
 
-  <h3>Policy</h3>
-  <p class="tofuman-note">What a mutation may put into a template. An API key works only when its ID is on keyAllowlist; a refused request shows the ID of its key in the audit log below.</p>
+  <div class="tofuman-heading"><span><i class="fa fa-shield"></i>Policy</span></div>
+  <p class="tofuman-note">What a mutation may put into a template. An API key works only when its ID is on keyAllowlist; a refused request shows the ID of its key in the activity below.</p>
+  <div id="tofuman-gaps-box" style="display:none">
+    <p>What the containers need and the policy lacks:</p>
+    <ul id="tofuman-gaps"></ul>
+    <input type="button" id="tofuman-add-gaps" value="Add the selected entries to the editor" disabled> <span id="tofuman-gaps-note" class="tofuman-note"></span>
+  </div>
   <textarea id="tofuman-policy" spellcheck="false"></textarea>
-  <ul id="tofuman-policy-errors" class="tofuman-errors tofuman-warning"></ul>
+  <ul id="tofuman-policy-errors" class="tofuman-list red-text"></ul>
   <input type="button" id="tofuman-save" value="Save policy">
   <span id="tofuman-saved" class="tofuman-note"></span>
 
-  <h3>Audit log</h3>
-  <table>
-    <thead><tr><th>Time (UTC)</th><th>Caller</th><th>Action</th><th>Name</th><th>Result</th><th>Error</th></tr></thead>
-    <tbody id="tofuman-audit"></tbody>
-  </table>
+  <div class="tofuman-heading"><span><i class="fa fa-history"></i>Activity</span></div>
+  <p class="tofuman-note">The last 100 lines of the audit log. Select a line of a mutation to see its operation, step by step.</p>
+  <div class="TableContainer">
+    <table class="unraid tofuman-table">
+      <thead><tr><td>When</td><td>Caller</td><td>Action</td><td>Container</td><td>Result</td><td>Took</td><td>Changes</td><td>Error</td></tr></thead>
+      <tbody id="tofuman-audit"></tbody>
+    </table>
+  </div>
 </div>
 
 <script>
 (function () {
   var endpoint = '/plugins/tofuman/include/endpoint.php';
+  var selected = {};      // the hand-made containers that a person ticked
+  var chosenGaps = {};    // the policy gaps that a person ticked
+  var openOperation = null;
+  var operations = {};    // the operations fetched for the activity, by ID
+  var openImport = null;  // the managed container whose import block shows
+  var last = null;
+  var timer = null;
 
-  function cell(value, mono) {
-    return $('<td>').text(value === null || value === undefined ? '' : String(value)).toggleClass('tofuman-mono', !!mono);
+  function text(value) {
+    return value === null || value === undefined ? '' : String(value);
   }
 
-  function utc(time) {
-    return time ? String(time).replace('T', ' ').replace('Z', '') : '';
+  function cell(value, extra) {
+    return $('<td>').text(text(value)).addClass(extra || '');
   }
 
-  function errors(list, target) {
-    target.empty();
-    $.each(list || [], function (_, error) { target.append($('<li>').text(error)); });
+  // REQ-TAB-18: the time since a moment, and the moment itself in UTC on hover
+  function ago(iso) {
+    var seconds = Math.round((Date.now() - Date.parse(iso)) / 1000);
+    if (!iso || isNaN(seconds)) return '';
+    if (seconds < 45) return 'just now';
+    var minutes = Math.round(seconds / 60);
+    if (minutes < 2) return 'a minute ago';
+    if (minutes < 45) return minutes + ' minutes ago';
+    var hours = Math.round(minutes / 60);
+    if (hours < 2) return 'an hour ago';
+    if (hours < 36) return hours + ' hours ago';
+    var days = Math.round(hours / 24);
+    return days < 2 ? 'a day ago' : days + ' days ago';
+  }
+
+  function when(iso) {
+    return $('<span>').text(ago(iso)).attr('title', iso ? String(iso).replace('T', ' ').replace('Z', '') + ' UTC' : '');
+  }
+
+  function took(ms) {
+    if (ms === null || ms === undefined) return '';
+    return ms < 1000 ? ms + ' ms' : (ms / 1000).toFixed(ms < 10000 ? 1 : 0) + ' s';
+  }
+
+  function orb(css, label) {
+    return $('<span>').append($('<i class="fa fa-circle">').addClass(css), document.createTextNode(label));
   }
 
   function failure(response) {
     return (response && response.errors ? response.errors : ['no answer from the endpoint']).join('; ');
   }
 
-  function render(state) {
+  // links and icons from templates go into the page only with a scheme that cannot run code
+  function safe(url, local) {
+    url = text(url);
+    return /^https?:\/\//i.test(url) || (local && /^\/[^\/]/.test(url)) ? url : null;
+  }
+
+  function container(name, icon, running, webUi) {
+    var src = safe(icon, true);
+    var image = src ? $('<img alt="">').attr('src', src).on('error', function () { $(this).replaceWith('<i class="fa fa-cube grey-text"></i>'); }) : $('<i class="fa fa-cube grey-text"></i>');
+    var title = $('<div>').append($('<span class="tofuman-name">').text(name));
+    var link = safe(webUi, false);
+    if (link) title.append($('<a class="tofuman-webui" target="_blank" rel="noopener" title="Open the WebUI"><i class="fa fa-globe"></i></a>').attr('href', link));
+    var state = $('<div class="tofuman-state">').append($('<i class="fa fa-circle">').addClass(running ? 'green-orb' : 'grey-orb'), document.createTextNode(running ? 'running' : 'stopped'));
+    return $('<td>').append($('<div class="tofuman-ct">').append(image, $('<div>').append(title, state)));
+  }
+
+  // REQ-TAB-25: tofuman_container.<label>, where the label is the name made into an HCL name
+  function label(name) {
+    var l = String(name).toLowerCase().replace(/[^a-z0-9_]/g, '_');
+    return /^[0-9]/.test(l) ? '_' + l : l;
+  }
+
+  function importBlock(name) {
+    return 'import {\n  to = tofuman_container.' + label(name) + '\n  id = "' + name + '"\n}\n';
+  }
+
+  function copy(box) {
+    var area = box.find('textarea');
+    var note = box.find('.tofuman-note').last();
+    function fallback() {
+      area.trigger('focus').trigger('select');
+      note.text(document.execCommand('copy') ? 'Copied.' : 'Select the text and copy it.');
+    }
+    // the webgui often runs over plain HTTP, where the clipboard API does not exist
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(area.val()).then(function () { note.text('Copied.'); }, fallback);
+    else fallback();
+  }
+
+  function renderStatus(state) {
     var build = state.testedBuild.match;
-    $('#tofuman-build')
-      .text(build ? 'The webgui files match the tested build ' + build + '.' : 'The webgui files match no tested build. tofuman refuses every mutation and every adoption until a plugin update covers this Unraid release.')
-      .toggleClass('tofuman-warning', !build);
+    $('#tofuman-build').empty().append(build
+      ? orb('green-orb', 'Tested build ' + build).attr('title', 'The webgui files match a build that this plugin release tested.')
+      : orb('red-orb', 'Untested Unraid release: tofuman refuses every mutation and adoption').attr('title', 'The webgui files match no tested build. A plugin update that covers this Unraid release lifts the refusal; the diagnostics file names each file that differs.'));
 
     // REQ-PKG-3
     var api = state.apiModule;
-    $('#tofuman-api').text({
-      loaded: 'unraid-api loaded the API module ' + api.version + ' at ' + utc(api.loadedAt) + ' UTC.',
-      stale: 'unraid-api runs version ' + api.version + ' of the API module, and the plugin is at ' + api.expected + '. Restart unraid-api to load it.',
-      gone: 'unraid-api loaded the API module, but that process is gone. Check that unraid-api runs.',
-      missing: 'unraid-api has not loaded the API module since the server started, so tofu cannot reach tofuman. /var/log/graphql-api.log says why.'
-    }[api.state]).toggleClass('tofuman-warning', api.state !== 'loaded');
+    var apiText = {
+      loaded: ['green-orb', 'API module ' + api.version + ' loaded ' + ago(api.loadedAt)],
+      stale: ['yellow-orb', 'unraid-api runs API module ' + api.version + ', the plugin is ' + api.expected + ': restart unraid-api'],
+      gone: ['red-orb', 'unraid-api loaded the API module, but that process is gone: check that unraid-api runs'],
+      missing: ['red-orb', 'unraid-api has not loaded the API module since the server started: /var/log/graphql-api.log says why']
+    }[api.state];
+    $('#tofuman-api').empty().append(orb(apiText[0], apiText[1]));
 
-    var managed = $('#tofuman-managed').empty();
+    var keys = state.keyAllowlistSize;
+    $('#tofuman-keys').empty().append(keys
+      ? orb('green-orb', keys + (keys === 1 ? ' API key' : ' API keys') + ' on the allowlist')
+      : orb('yellow-orb', 'No API key on the allowlist: tofu cannot reach tofuman').attr('title', 'Create an API key with only DOCKER:CREATE_ANY in the webgui, and put its ID on keyAllowlist in the policy below.'));
+    $('#tofuman-plugin').text(state.plugin ? 'Plugin ' + state.plugin : '');
+
+    // REQ-TAB-31
+    var week = state.stats;
+    $('#tofuman-week').text('Last ' + week.days + ' days: ' + week.succeeded + ' succeeded, ' + week.failed + ' failed, ' + week.refused + ' refused' +
+      (week.medianMs === null ? '' : ', median operation ' + took(week.medianMs)) + '.');
+
+    // REQ-TAB-22
+    var running = state.running;
+    if (running) {
+      var steps = running.steps || [];
+      var step = steps.length ? steps[steps.length - 1] : null;
+      $('#tofuman-running').show().empty().append($('<i class="fa fa-refresh fa-spin">'),
+        document.createTextNode(running.mutation + ' of ' + (running.name || '?') + (step ? ': step ' + step.step + ', started ' + ago(step.startedAt) : ': checks')));
+    } else {
+      $('#tofuman-running').hide();
+    }
+  }
+
+  function renderManaged(state) {
+    var body = $('#tofuman-managed').empty();
+    $('#tofuman-managed-count').text('(' + state.managed.length + ')');
+    $('#tofuman-import-all').prop('disabled', !state.managed.length);
     $.each(state.managed, function (_, c) {
-      managed.append($('<tr>').append(cell(c.definition.name), cell(c.id, true), cell(utc(c.lastMutationAt)),
-        cell(c.changedSinceLastMutation ? 'yes' : 'no').toggleClass('tofuman-warning', c.changedSinceLastMutation), cell(c.running ? 'yes' : 'no')));
+      var d = c.definition;
+      var network = d.network + (d.ipAddresses.length ? ' · ' + d.ipAddresses.join(', ') : '');
+      var template = c.changedSinceLastMutation
+        ? $('<td class="orange-text">').text('changed in the webgui').attr('title', 'The template differs from what the last mutation wrote. The next tofu plan shows the difference as drift.')
+        : $('<td class="green-text">').text('as tofu left it');
+      var hcl = $('<input type="button" value="Import block">').on('click', function () {
+        openImport = openImport === c.id ? null : c.id;
+        renderManaged(last);
+      });
+      body.append($('<tr>').append(container(d.name, c.tab.icon, c.running, c.tab.webUi), cell(d.repository).attr('title', d.repository),
+        cell(network), $('<td>').append(when(c.lastMutationAt)), template, cell(c.id.slice(0, 8), 'tofuman-mono').attr('title', c.id), $('<td>').append(hcl)));
+      if (openImport === c.id) {
+        var box = $('<div class="tofuman-import">').append($('<textarea readonly spellcheck="false">').val(importBlock(d.name)),
+          $('<input type="button" value="Copy">').on('click', function () { copy(box); }), ' ', $('<span class="tofuman-note">'));
+        body.append($('<tr class="tofuman-detail">').append($('<td colspan="7">').append(box)));
+      }
     });
-    if (!state.managed.length) managed.append($('<tr>').append(cell('None yet.').attr('colspan', 5)));
+    if (!state.managed.length) body.append($('<tr>').append(cell('None yet. A tofu apply creates one, and Adopt below turns a hand-made one into one.').attr('colspan', 7)));
+    $('#tofuman-import textarea').val($.map(state.managed, function (c) { return importBlock(c.definition.name); }).join('\n'));
+  }
 
-    var handMade = $('#tofuman-hand-made').empty();
+  function renderHandMade(state) {
+    var body = $('#tofuman-hand-made').empty();
+    $('#tofuman-hand-made-count').text('(' + state.handMade.length + ')');
+    var ready = 0;
     $.each(state.handMade, function (_, c) {
-      var adopt = $('<input type="button" value="Adopt">').data('name', c.name).addClass('tofuman-adopt');
-      handMade.append($('<tr>').append(cell(c.name), cell(c.running ? 'yes' : 'no'), $('<td>').append(adopt)));
+      var ok = !c.refusals.length;
+      if (!ok) delete selected[c.name];
+      ready += ok ? 1 : 0;
+      var tick = $('<input type="checkbox">').prop('disabled', !ok).prop('checked', !!selected[c.name]).on('change', function () {
+        if (this.checked) selected[c.name] = true; else delete selected[c.name];
+        updateAdoptButton();
+      });
+      var verdict = ok ? $('<td class="green-text">').text('ready') : $('<td class="tofuman-wrap orange-text">').append($('<ul class="tofuman-list">').append($.map(c.refusals, function (r) { return $('<li>').text(r); })));
+      var adopt = $('<input type="button" value="Adopt">').prop('disabled', !ok).on('click', function () { adoptNames([c.name]); });
+      body.append($('<tr>').append($('<td>').append(tick), container(c.name, c.tab.icon, c.running, null), cell(c.image).attr('title', c.image), verdict, $('<td>').append(adopt)));
     });
-    if (!state.handMade.length) handMade.append($('<tr>').append(cell('None.').attr('colspan', 3)));
+    if (!state.handMade.length) body.append($('<tr>').append(cell('None.').attr('colspan', 5)));
+    $('#tofuman-select-all').prop('disabled', !ready).prop('checked', ready > 0 && Object.keys(selected).length === ready);
+    updateAdoptButton();
+  }
 
+  function updateAdoptButton() {
+    var count = Object.keys(selected).length;
+    $('#tofuman-adopt-selected').prop('disabled', !count).val(count ? 'Adopt selected (' + count + ')' : 'Adopt selected');
+  }
+
+  // REQ-TAB-24
+  function adoptNames(names) {
+    if (!window.confirm('Adopt ' + names.join(', ') + '? tofuman records each one in its registry and writes the marker into its template. The containers keep running as they are.')) return;
+    $.post(endpoint, {action: 'adoptMany', names: names}, null, 'json').done(function (response) {
+      if (!response.ok) {
+        window.alert('tofuman did not adopt: ' + failure(response));
+      } else {
+        var refused = $.grep(response.result, function (r) { return !r.adopted; });
+        if (refused.length) window.alert($.map(refused, function (r) { return r.name + ': ' + r.errors.join('; '); }).join('\n'));
+      }
+      $.each(names, function (_, name) { delete selected[name]; });
+      load();
+    });
+  }
+
+  // REQ-TAB-26 to REQ-TAB-28: one line per entry to add, the gaps of every container merged
+  function gapKey(gap) {
+    return gap.kind === 'bindRoot' || gap.kind === 'network' || gap.kind === 'flag' ? gap.kind + '|' + gap.value : gap.kind + '|' + gap.value + '|' + gap.container;
+  }
+
+  function gapLabel(gap) {
+    switch (gap.kind) {
+      case 'bindRoot': return 'bindRoots: add ' + gap.value;
+      case 'network': return 'networks: add ' + gap.value;
+      case 'flag': return 'extraParamFlags: add ' + gap.value;
+      case 'device': return 'exceptions.' + gap.container + '.devices: add ' + gap.value;
+      default: return 'exceptions.' + gap.container + ': "' + gap.kind + '": true';
+    }
+  }
+
+  function renderGaps(state) {
+    var gaps = {};
+    $.each(state.gaps.managed, function (_, gap) {
+      var key = gapKey(gap);
+      gaps[key] = gaps[key] || {gap: gap, why: []};
+      gaps[key].why.push(gap.container + ', managed: ' + gap.text);
+    });
+    $.each(state.gaps.recent, function (_, refusal) {
+      $.each(refusal.gaps, function (_, gap) {
+        var key = gapKey(gap);
+        gaps[key] = gaps[key] || {gap: gap, why: []};
+        gaps[key].why.push(gap.container + ', refused ' + ago(refusal.time) + ': ' + gap.text);
+      });
+    });
+    var list = $('#tofuman-gaps').empty();
+    var keys = Object.keys(gaps);
+    $.each(Object.keys(chosenGaps), function (_, key) { if (!gaps[key]) delete chosenGaps[key]; });
+    $.each(keys, function (_, key) {
+      var tick = $('<input type="checkbox">').prop('checked', !!chosenGaps[key]).on('change', function () {
+        if (this.checked) chosenGaps[key] = gaps[key].gap; else delete chosenGaps[key];
+        $('#tofuman-add-gaps').prop('disabled', !Object.keys(chosenGaps).length);
+      });
+      list.append($('<li>').append($('<label>').append(tick, ' ', $('<span class="tofuman-mono">').text(gapLabel(gaps[key].gap)),
+        $('<span class="tofuman-why">').text(gaps[key].why[0] + (gaps[key].why.length > 1 ? ' (and ' + (gaps[key].why.length - 1) + ' more)' : '')).attr('title', gaps[key].why.join('\n')))));
+    });
+    $('#tofuman-gaps-box').toggle(keys.length > 0);
+    $('#tofuman-add-gaps').prop('disabled', !Object.keys(chosenGaps).length);
+  }
+
+  function addGaps() {
+    var policy;
+    try {
+      policy = JSON.parse($('#tofuman-policy').val());
+    } catch (e) {
+      $('#tofuman-gaps-note').text('The policy in the editor is not JSON; fix it first.');
+      return;
+    }
+    function add(list, value) { if (list.indexOf(value) < 0) list.push(value); }
+    policy.exceptions = policy.exceptions && !Array.isArray(policy.exceptions) ? policy.exceptions : {};
+    $.each(chosenGaps, function (_, gap) {
+      var exception = policy.exceptions[gap.container] = policy.exceptions[gap.container] || {};
+      switch (gap.kind) {
+        case 'bindRoot': add(policy.bindRoots = policy.bindRoots || [], gap.value); break;
+        case 'network': add(policy.networks = policy.networks || [], gap.value); break;
+        case 'flag': add(policy.extraParamFlags = policy.extraParamFlags || [], gap.value); break;
+        case 'device': add(exception.devices = exception.devices || [], gap.value); break;
+        default: exception[gap.kind] = true;
+      }
+      if (!Object.keys(exception).length) delete policy.exceptions[gap.container];
+    });
+    $('#tofuman-policy').val(JSON.stringify(policy, null, 4)).data('edited', true);
+    chosenGaps = {};
+    $('#tofuman-gaps-note').text('Added. Check the editor, then select Save policy.');
+    $('#tofuman-saved').text('');
+    renderGaps(last);
+  }
+
+  function renderPolicy(state) {
     // an unsaved edit keeps its text and its errors
     if (!$('#tofuman-policy').data('edited')) {
       $('#tofuman-policy').val(state.policy.text || '');
-      errors(state.policy.errors, $('#tofuman-policy-errors'));
+      $('#tofuman-policy-errors').empty().append($.map(state.policy.errors || [], function (e) { return $('<li>').text(e); }));
     }
+  }
 
-    var audit = $('#tofuman-audit').empty();
+  // REQ-TAB-30
+  function renderOperation(row, id) {
+    var detail = $('<td colspan="8">');
+    row.after($('<tr class="tofuman-detail">').append(detail));
+    var operation = operations[id];
+    if (operation === undefined) {
+      detail.text('Loading the operation.');
+      return;
+    }
+    if (operation === null) {
+      detail.text('The operation log no longer holds this operation; it keeps the last 200.');
+      return;
+    }
+    detail.append($('<div>').text('Operation ' + operation.id + ': ' + operation.mutation + ' of ' + operation.name + ', queued ' + ago(operation.queuedAt) +
+      (operation.result === 'running' ? ', running' : ', ' + operation.result + ' after ' + took(operation.durationMs) + (operation.step ? ' at the step ' + operation.step : '')) + '.'));
+    if (operation.changes && operation.changes.length) detail.append($('<div>').text('Changes: ' + operation.changes.join(', ') + '.'));
+    var steps = $('<table class="tofuman-steps">');
+    $.each(operation.steps || [], function (_, step) {
+      var facts = $('<td>');
+      if (step.digest) facts.append($('<div class="tofuman-mono">').text(step.digest));
+      if (step.command) facts.append($('<pre>').text(step.command));
+      if (step.output) facts.append($('<div class="tofuman-mono">').text(step.output));
+      if (step.exitCode !== undefined) facts.append($('<div>').text('exit code ' + step.exitCode));
+      if (step.log) facts.append($('<pre>').text(step.log.length ? step.log.join('\n') : '(no log lines)'));
+      steps.append($('<tr>').append(cell(step.step), $('<td>').append(when(step.startedAt)), cell(took(step.ms)), facts));
+    });
+    detail.append(steps);
+    if (operation.error) detail.append($('<pre class="red-text">').text(operation.error));
+  }
+
+  function fetchOperation(id) {
+    $.getJSON(endpoint, {action: 'operation', id: id}).done(function (response) {
+      operations[id] = response.ok ? response.result : null;
+      if (last) renderAudit(last);
+    });
+  }
+
+  function renderAudit(state) {
+    var body = $('#tofuman-audit').empty();
     $.each(state.audit.slice().reverse(), function (_, line) {
       var caller = line.callerName && line.callerName !== line.caller ? line.caller + ' (' + line.callerName + ')' : line.caller;
-      audit.append($('<tr>').append(cell(utc(line.time)), cell(caller, true),
-        cell(line.action), cell(line.name), cell(line.result).toggleClass('tofuman-warning', line.result !== 'succeeded'), cell(line.error)));
+      var result = cell(line.result, line.result === 'succeeded' ? 'green-text' : (line.result === 'failed' ? 'red-text' : 'orange-text'));
+      var changes = line.changes || [];
+      var row = $('<tr>').append($('<td>').append(when(line.time)), cell(caller, 'tofuman-mono').attr('title', (line.providerVersion ? 'provider ' + line.providerVersion : '')),
+        cell(line.action), cell(line.name), result, cell(took(line.durationMs)), cell(changes.join(', ')).attr('title', changes.join('\n')), cell(line.error).attr('title', text(line.error)));
+      body.append(row);
+      if (line.operationId) {
+        row.addClass('tofuman-clickable').attr('title', 'Show the operation').on('click', function () {
+          openOperation = openOperation === line.operationId ? null : line.operationId;
+          if (openOperation && operations[openOperation] === undefined) fetchOperation(openOperation);
+          renderAudit(last);
+        });
+        if (openOperation === line.operationId) renderOperation(row, line.operationId);
+      }
     });
-    if (!state.audit.length) audit.append($('<tr>').append(cell('Empty.').attr('colspan', 6)));
+    if (!state.audit.length) body.append($('<tr>').append(cell('Empty.').attr('colspan', 8)));
+  }
+
+  function render(state) {
+    last = state;
+    renderStatus(state);
+    renderManaged(state);
+    renderHandMade(state);
+    renderGaps(state);
+    renderPolicy(state);
+    renderAudit(state);
+  }
+
+  // REQ-TAB-21
+  function schedule() {
+    clearTimeout(timer);
+    timer = setTimeout(load, last && last.running ? 5000 : 30000);
   }
 
   function load() {
     $.getJSON(endpoint, {action: 'state'}).done(function (response) {
-      if (response.ok) render(response.result);
-      else $('#tofuman-build').text('The tab could not read the state: ' + failure(response)).addClass('tofuman-warning');
+      if (response.ok) {
+        if (openOperation && operations[openOperation] && operations[openOperation].result === 'running') fetchOperation(openOperation);
+        render(response.result);
+      } else {
+        $('#tofuman-build').text('The tab could not read the state: ' + failure(response)).addClass('red-text');
+      }
     }).fail(function (xhr) {
-      $('#tofuman-build').text('The endpoint answered HTTP ' + xhr.status + '.').addClass('tofuman-warning');
-    });
+      $('#tofuman-build').text('The endpoint answered HTTP ' + xhr.status + '.').addClass('red-text');
+    }).always(schedule);
   }
 
   $('#tofuman-policy').on('input', function () { $(this).data('edited', true); $('#tofuman-saved').text(''); });
 
   $('#tofuman-save').on('click', function () {
     $.post(endpoint, {action: 'savePolicy', text: $('#tofuman-policy').val()}, null, 'json').done(function (response) {
+      var errors = $('#tofuman-policy-errors').empty();
       if (response.ok) {
         $('#tofuman-policy').data('edited', false).val(response.result.text);
-        errors(response.result.errors, $('#tofuman-policy-errors'));
+        errors.append($.map(response.result.errors, function (e) { return $('<li>').text(e); }));
         $('#tofuman-saved').text('Saved.');
+        $('#tofuman-gaps-note').text('');
+        load();
       } else {
-        errors(response.errors, $('#tofuman-policy-errors'));
+        errors.append($.map(response.errors, function (e) { return $('<li>').text(e); }));
         $('#tofuman-saved').text('Not saved.');
       }
     });
   });
 
-  $('#tofuman-hand-made').on('click', '.tofuman-adopt', function () {
-    var name = $(this).data('name');
-    if (!window.confirm('Adopt ' + name + '? tofuman records it in its registry and writes the marker into its template. The container keeps running as it is.')) return;
-    $.post(endpoint, {action: 'adopt', name: name}, null, 'json').done(function (response) {
-      if (!response.ok) window.alert('tofuman did not adopt ' + name + ': ' + failure(response));
-      load();
-    });
+  $('#tofuman-add-gaps').on('click', addGaps);
+  $('#tofuman-adopt-selected').on('click', function () { adoptNames(Object.keys(selected)); });
+  $('#tofuman-select-all').on('change', function () {
+    var on = this.checked;
+    $.each(last ? last.handMade : [], function (_, c) { if (!c.refusals.length) { if (on) selected[c.name] = true; else delete selected[c.name]; } });
+    renderHandMade(last);
   });
+  $('#tofuman-import-all').on('click', function () { $('#tofuman-import').toggle(); });
+  $('#tofuman-import .tofuman-copy').on('click', function () { copy($('#tofuman-import')); });
 
   load();
 })();

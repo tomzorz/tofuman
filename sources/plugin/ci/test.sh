@@ -96,8 +96,10 @@ case "${1:-}" in
     ;;
   --tab)
     port=${2:?usage: ci/test.sh --tab PORT}
-    # not named tofumantest-: the seed removes those containers before it creates its own
-    in_image --rm --name tofuman-tab-preview -p "127.0.0.1:$port:8080" tofuman-shim-test \
+    # not named tofumantest-: the seed removes those containers before it creates its own; the
+    # seed's failed operation notifies the recorder of the tests, not the webgui's notify script
+    in_image --rm --name tofuman-tab-preview -p "127.0.0.1:$port:8080" \
+      -e TOFUMAN_NOTIFY=$p/tests/fixtures/notify.php -e TOFUMAN_NOTIFY_LOG=/tmp/tofuman-notifications.log tofuman-shim-test \
       sh -c "php $p/tests/preview/seed.php && php -S 0.0.0.0:8080 $p/tests/preview/router.php"
     ;;
   *)

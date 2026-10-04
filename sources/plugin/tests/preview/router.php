@@ -35,13 +35,42 @@ if (str_starts_with($path, '/webGui/')) {
 
 $theme = preg_match('/^(white|black|azure|gray)$/', $_GET['theme'] ?? '') ? $_GET['theme'] : 'white';
 [, $body] = explode("\n---\n", (string)file_get_contents(dirname(__DIR__, 2) . '/tab/tofuman.page'), 2);
+
+// /docker: a stand-in of the stock container table, with the markup of DockerContainers.php at
+// the tag 7.3.2 for each row, so the badge (section 13.1) shows where it shows on a server
+if ($path === '/docker') {
+  $rows = '';
+  foreach (['tofumantest-a' => 'stopped', 'tofumantest-hand' => 'started', 'tofumantest-shell' => 'stopped'] as $name => $status) {
+    $color = $status === 'started' ? 'green-text' : 'red-text';
+    $shape = $status === 'started' ? 'play' : 'square';
+    $rows .= "<tr class='sortable'><td class='ct-name' style='width:220px;padding:8px'><i class='fa fa-arrows-v mover orange-text'></i>"
+      . "<span class='outer'><span class='hand'><img src='/plugins/dynamix.docker.manager/images/question.png' class='img'></span>"
+      . "<span class='inner'><span class='appname '><a class='exec'>$name</a></span><br><i class='fa fa-$shape $status $color'></i><span class='state'>$status</span></span></span></td>"
+      . "<td>latest</td><td>bridge</td><td>172.17.0.2</td><td>8080/tcp</td><td>192.0.2.10:18081</td><td>/config &rarr; /mnt/user/appdata/x</td>"
+      . "<td><input type='checkbox' class='autostart' container='$name'></td><td>1 hour</td></tr>";
+  }
+  $body = "<link type='text/css' rel='stylesheet' href='/plugins/tofuman/include/endpoint.php?action=badges'>"
+    . "<div class='TableContainer'><table id='docker_containers' class='tablesorter shift'><thead><tr><th>Application</th><th>Version</th><th>Network</th>"
+    . "<th>Container IP</th><th>Container Port</th><th>LAN IP:Port</th><th>Volume Mappings</th><th>Autostart</th><th>Uptime</th></tr></thead>"
+    . "<tbody id='docker_list'>$rows</tbody></table></div>";
+}
+if (str_starts_with($path, '/plugins/dynamix.docker.manager/images/')) {
+  $file = realpath('/usr/local/emhttp' . $path);
+  if ($file === false || !str_starts_with($file, '/usr/local/emhttp/plugins/dynamix.docker.manager/images/')) {
+    http_response_code(404);
+    return;
+  }
+  header('Content-Type: image/png');
+  readfile($file);
+  return;
+}
 ?>
 <!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
 <title>tofuman tab preview</title>
-<?php foreach (['default-fonts', 'default-color-palette', 'default-base', 'default-dynamix', "themes/$theme"] as $sheet): ?>
+<?php foreach (['default-fonts', 'default-color-palette', 'default-base', 'default-dynamix', 'font-awesome', "themes/$theme"] as $sheet): ?>
 <link type="text/css" rel="stylesheet" href="/webGui/styles/<?= $sheet ?>.css">
 <?php endforeach ?>
 <script src="/webGui/javascript/dynamix.js"></script>
