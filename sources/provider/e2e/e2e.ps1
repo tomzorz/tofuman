@@ -95,8 +95,8 @@ if ((Get-PlanCode) -ne 0) {
 $id = Get-ManagedId 'tofuman_container.e2e'
 Write-Pass "1-2: apply creates tofuman-e2e with the managed ID $id, and the next plan shows no change"
 
-Confirm-Step 'Step 3. In the webgui, open Docker and check that tofuman-e2e has Edit and Update and runs.' `
-  '3: tofuman-e2e has Edit and Update and runs'
+Confirm-Step 'Step 3. In the webgui, open Docker and check that tofuman-e2e runs, has Edit in its menu, and shows an update status such as "up-to-date" (DockerMan tracks updates only for its own containers; Update appears there when a newer image exists).' `
+  '3: tofuman-e2e runs, has Edit, and has an update status'
 
 # Steps 4 and 5
 Write-Host ''
