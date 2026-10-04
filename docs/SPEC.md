@@ -379,7 +379,7 @@ If step 2, 3, or 5 fails, do not promote the candidate release. Fix the plugin f
   - Whether the definition changed since the last mutation.
   - Whether the container runs.
 - REQ-TAB-3: The tab MUST decide whether the definition changed since the last mutation by comparing the SHA-256 hash of the definition with the hash in the registry.
-- REQ-TAB-4: For each hand-made container, the tab MUST offer the action **Adopt**.
+- REQ-TAB-4: The tab MUST let a person select hand-made containers, and MUST offer the action **Adopt** for the selection.
 - REQ-TAB-5: **Adopt** MUST add a registry entry with a new managed ID, write the marker into the template, and append a line to the audit log.
 - REQ-TAB-6: **Adopt** MUST NOT recreate the container. The Docker label of the marker appears at the next recreate.
 - REQ-TAB-7: **Adopt** MUST refuse a template that enables Tailscale.
@@ -404,7 +404,7 @@ The rework of 2026-10-04 makes the tab the place where a person moves containers
 - REQ-TAB-21: The tab MUST refresh its facts every 30 seconds, and every 5 seconds while an operation runs.
 - REQ-TAB-22: While an operation runs, the tab MUST show the container, the mutation, and the step that runs.
 - REQ-TAB-23: For each hand-made container, the tab MUST show whether **Adopt** would succeed, and MUST name each check that would refuse the adoption.
-- REQ-TAB-24: The tab MUST let a person adopt several hand-made containers in one action. The plugin MUST adopt each of them by REQ-TAB-5 to REQ-TAB-17, with one line in the audit log for each container.
+- REQ-TAB-24: For a selection of several hand-made containers, the plugin MUST adopt each container by REQ-TAB-5 to REQ-TAB-17, with one line in the audit log for each container.
 - REQ-TAB-25: For each managed container, the tab MUST offer an OpenTofu `import` block that names the container. The tab MUST also offer one text with the `import` blocks of all managed containers. Each block MUST name the resource `tofuman_container.<label>`, where `<label>` is the container name in lowercase, with each character outside `a-z`, `0-9`, and `_` replaced by `_`, and with `_` in front of a leading digit.
 - REQ-TAB-26: The tab MUST list each policy gap of each managed container.
 - REQ-TAB-27: The tab MUST also list each policy gap of the last 20 containers whose mutation or query `check` the policy refused, and MUST leave out each gap that the policy has closed since. To serve that list, the shim MUST keep those policy gaps in `/var/run/tofuman-gaps.json`.
@@ -413,6 +413,15 @@ The rework of 2026-10-04 makes the tab the place where a person moves containers
 - REQ-TAB-30: For each line of the audit log that names an operation, the tab MUST show the line of that operation from the operation log, on request.
 - REQ-TAB-31: The tab MUST show, for the last 7 days, the number of mutations that succeeded, that failed, and that the API module refused, and the median duration of an operation.
 - REQ-TAB-32: The tab MUST offer the diagnostics file for download (section 16.5).
+
+The first end-to-end run with the reworked tab changed its layout (decided 2026-10-05):
+
+- REQ-TAB-36: The tab MUST show the hand-made containers in a section that a person can open and close. The tab MUST show the policy in a second such section. Both sections MUST be closed when the tab loads.
+- REQ-TAB-37: The heading of the hand-made section MUST show the number of hand-made containers. The heading of the policy section MUST show the number of entries that the listed policy gaps would add, and the number of errors in the saved policy, each when it is above zero.
+- REQ-TAB-38: The tab MUST place each button that acts on more than one row of a table below that table, as the **Docker** page does.
+- REQ-TAB-39: The tab MUST wrap the changes and the error of each line of the audit log inside their cells. Each of the two cells MUST show at most three lines of text, and MUST show its full text when a pointer rests on it.
+- REQ-TAB-40: The tab MUST mark each line of the audit log that names an operation, and MUST highlight the line whose operation it shows (REQ-TAB-30).
+- REQ-TAB-41: When a pointer rests on the operation of REQ-TAB-30 or on the `import` block of one managed container, the tab MUST NOT highlight it. Reason: neither reacts to a click.
 
 ### 13.1 The badge
 
@@ -825,7 +834,7 @@ End-to-end procedure. Preconditions: the plugin is installed on the server, an A
 8. Add an `ExtraParams` flag that tofuman does not know to the HCL file, and run `tofu plan`. The plan fails and names the flag. Remove the flag again.
 9. Give the container a command that exits at once, and run `tofu apply`. The apply fails at the step `start check` and shows the log lines of the container. The previous container runs again. Put the command back.
 10. Run `tofu destroy`. The container and its template are gone.
-11. Create a throwaway hand-made container in the webgui, and select **Adopt** for it in the tab.
+11. Create a throwaway hand-made container in the webgui. In the tab, tick it in the hand-made section, and select **Adopt selected**.
 12. Run `tofu import` with the name of that container, and write matching HCL. `tofu plan` shows no change.
 13. Check that the audit log shows each mutation and the adoption, and that the tab shows the operation of step 9 with its log lines.
 

@@ -65,7 +65,7 @@ resource "tofuman_container" "whoami" {
 }
 ```
 
-The policy on the tab decides what a container may have: host paths under its bind roots (`/mnt/user/appdata/` at first), its networks (`bridge` at first), the `extra_params` flags it lists, and exceptions per container for privileged mode, the host network, the host IPC namespace and devices. `tofu plan` asks the server to run the same checks, so a refusal shows in the plan, before anything changes. When the policy is what is missing, the tab lists each missing entry, and Add the selected entries to the editor puts them into the policy for you to save.
+The policy on the tab decides what a container may have: host paths under its bind roots (`/mnt/user/appdata/` at first), its networks (`bridge` at first), the `extra_params` flags it lists, and exceptions per container for privileged mode, the host network, the host IPC namespace and devices. `tofu plan` asks the server to run the same checks, so a refusal shows in the plan, before anything changes. When the policy is what is missing, the Policy heading on the tab says how many entries it lacks. Open it and tick them, and Add the selected entries to the editor puts them into the policy for you to save.
 
 ## Testing a fresh build of your own image
 
@@ -76,14 +76,14 @@ The policy on the tab decides what a container may have: host paths under its bi
 
 ## Moving existing containers in
 
-1. The hand-made list on the tab says for each container whether Adopt would work, and why not. Tick the ones you want, and select Adopt selected. Adopt changes no container; it records the container and marks its template.
-2. Select Import blocks for all, paste the blocks into your configuration, and run `tofu plan -generate-config-out=generated.tf` once.
+1. Open Hand-made containers on the tab. It says for each container whether Adopt would work, and why not. Tick the ones you want, and select Adopt selected below the list. Adopt changes no container; it records the container and marks its template.
+2. Select Import blocks for all below the managed containers, paste the blocks into your configuration, and run `tofu plan -generate-config-out=generated.tf` once.
 3. Look over the `secret` blocks in the generated file, wire their values to wherever you keep secrets, and run `tofu apply`.
 
 ## When something goes wrong
 
 - `TF_LOG=DEBUG tofu apply` shows each request to the server with its duration, and each step of each operation that the provider waits for.
-- The Activity list on the tab shows each mutation. Select one to see its operation step by step: the digest of the pull, the `docker create` command with masked values hidden, its output, and for a failed start check the exit code and the log lines.
+- The Activity list on the tab shows each mutation. Select a line with a chevron to see its operation step by step: the digest of the pull, the `docker create` command with masked values hidden, its output, and for a failed start check the exit code and the log lines.
 - The Diagnostics file link at the top of the tab downloads what someone helping you needs: versions, the build check, the policy, the registry, the audit and operation logs, and the lines of the unraid-api log that mention tofuman. It holds no API key, and masked values show as `***`.
 - A failed operation raises an Unraid notification, and so does an Unraid release without a tested build.
 

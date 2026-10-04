@@ -19,9 +19,18 @@ Markdown="false"
 #tofuman .tofuman-status a { margin-left: auto; }
 #tofuman .tofuman-week { opacity: 0.8; margin-bottom: 4px; }
 #tofuman .tofuman-running { margin: 8px 0; padding: 6px 10px; border-left: 3px solid var(--blue-800); }
-#tofuman .tofuman-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 24px 0 6px; font-size: 1.6rem; font-weight: bold; }
-#tofuman .tofuman-heading .tofuman-count { font-weight: normal; opacity: 0.7; }
-#tofuman .tofuman-heading input[type=button] { margin: 0; }
+#tofuman .tofuman-heading { margin: 24px 0 6px; font-size: 1.6rem; font-weight: bold; }
+#tofuman .tofuman-heading .tofuman-count, #tofuman .tofuman-heading .tofuman-flag { font-weight: normal; margin-left: 4px; }
+#tofuman .tofuman-heading .tofuman-count { opacity: 0.7; }
+/* REQ-TAB-36: the disclosure of details, with a chevron in place of the marker */
+#tofuman details > summary { cursor: pointer; list-style: none; }
+#tofuman details > summary::-webkit-details-marker { display: none; }
+#tofuman .tofuman-chevron { width: 1em; font-size: 0.75em; text-align: center; transition: transform 0.15s; }
+#tofuman details[open] > summary .tofuman-chevron, #tofuman tr.tofuman-open .tofuman-chevron { transform: rotate(90deg); }
+#tofuman td .tofuman-chevron { margin-right: 6px; opacity: 0.7; }
+@media (prefers-reduced-motion: reduce) { #tofuman .tofuman-chevron { transition: none; } }
+/* REQ-TAB-38: the buttons of a table go below it, as on the Docker page */
+#tofuman .tofuman-actions { margin: 8px 0 4px; }
 #tofuman .tofuman-note { opacity: 0.8; margin: 4px 0 8px; }
 #tofuman .tofuman-ct { display: flex; align-items: center; gap: 10px; }
 #tofuman .tofuman-ct img, #tofuman .tofuman-ct > i.fa { width: 30px; height: 30px; font-size: 26px; line-height: 30px; text-align: center; object-fit: contain; flex: none; }
@@ -30,8 +39,22 @@ Markdown="false"
 #tofuman .tofuman-ct .tofuman-state i.fa { margin-right: 4px; font-size: 0.9rem; }
 #tofuman .tofuman-ct a.tofuman-webui { margin-left: 6px; }
 #tofuman table.tofuman-table td.tofuman-wrap { white-space: normal; line-height: 1.5; height: auto; padding-top: 4px; padding-bottom: 4px; }
+/* REQ-TAB-39: at most three lines; the title of the cell holds the whole text */
+#tofuman .tofuman-clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; white-space: pre-line; overflow-wrap: break-word; }
+/* an error can hold a path or a digest wider than its column; it breaks anywhere so the table keeps its width */
+#tofuman td.tofuman-error .tofuman-clamp { overflow-wrap: anywhere; }
 #tofuman tr.tofuman-clickable { cursor: pointer; }
 #tofuman tr.tofuman-detail > td { white-space: normal; line-height: 1.5; height: auto; padding: 8px 12px 12px; }
+/* REQ-TAB-40 and REQ-TAB-41: the open row and its detail as one block, with a bar in the brand
+   colour down its left edge. The webgui stripes and highlights every row inside table.unraid,
+   the rows of a nested table included, so a detail stays out of the stripes and ignores the
+   pointer. A border would not show: the table's hidden border style wins at its edge. */
+#tofuman table.tofuman-table > tbody > tr:nth-child(even) { background-color: transparent; }
+#tofuman table.tofuman-table > tbody > tr:nth-child(even of :not(.tofuman-detail)) { background-color: var(--table-background-color); }
+#tofuman table.tofuman-table > tbody > tr.tofuman-open, #tofuman table.tofuman-table > tbody > tr.tofuman-detail { background-color: var(--table-background-color); }
+#tofuman tr.tofuman-open > td, #tofuman tr.tofuman-detail > td { background-color: var(--hover-table-row-background-color); }
+#tofuman tr.tofuman-open > td:first-child, #tofuman tr.tofuman-detail > td { background-image: linear-gradient(var(--orange-500), var(--orange-500)); background-size: 3px 100%; background-repeat: no-repeat; }
+#tofuman tr.tofuman-detail tr, #tofuman tr.tofuman-detail tr:hover > td, #tofuman table.tofuman-steps { background-color: transparent; }
 #tofuman .tofuman-mono, #tofuman textarea, #tofuman pre { font-family: monospace; }
 #tofuman textarea { width: 100%; box-sizing: border-box; }
 #tofuman #tofuman-policy { min-height: 18em; }
@@ -42,7 +65,8 @@ Markdown="false"
 #tofuman ul#tofuman-gaps li { line-height: 2.2rem; }
 #tofuman ul#tofuman-gaps .tofuman-why { opacity: 0.7; margin-left: 8px; }
 #tofuman table.tofuman-steps { width: auto; margin: 6px 0; }
-#tofuman table.tofuman-steps td { padding: 2px 16px 2px 0; height: auto; line-height: 1.6; vertical-align: top; white-space: normal; }
+#tofuman table.tofuman-steps td { padding: 2px 16px 2px 0; height: auto; line-height: 1.6; vertical-align: top; }
+#tofuman table.tofuman-steps td:last-child { white-space: normal; }
 </style>
 
 <div id="tofuman">
@@ -56,47 +80,46 @@ Markdown="false"
   <div id="tofuman-week" class="tofuman-week"></div>
   <div id="tofuman-running" class="tofuman-running" style="display:none"></div>
 
-  <div class="tofuman-heading">
-    <span><i class="fa fa-cubes"></i>Managed containers <span id="tofuman-managed-count" class="tofuman-count"></span></span>
-    <input type="button" id="tofuman-import-all" value="Import blocks for all">
-  </div>
-  <div id="tofuman-import" class="tofuman-import" style="display:none">
-    <p class="tofuman-note">Paste these into the configuration, then run <span class="tofuman-mono">tofu plan -generate-config-out=generated.tf</span> once to write the matching HCL.</p>
-    <textarea readonly spellcheck="false"></textarea>
-    <input type="button" class="tofuman-copy" value="Copy"> <span class="tofuman-note"></span>
-  </div>
+  <div class="tofuman-heading"><i class="fa fa-cubes"></i>Managed containers <span id="tofuman-managed-count" class="tofuman-count"></span></div>
   <div class="TableContainer">
     <table class="unraid tofuman-table">
       <thead><tr><td>Container</td><td>Image</td><td>Network</td><td>Last mutation</td><td>Template</td><td>Managed ID</td><td></td></tr></thead>
       <tbody id="tofuman-managed"></tbody>
     </table>
   </div>
-
-  <div class="tofuman-heading">
-    <span><i class="fa fa-wrench"></i>Hand-made containers <span id="tofuman-hand-made-count" class="tofuman-count"></span></span>
-    <input type="button" id="tofuman-adopt-selected" value="Adopt selected" disabled>
-  </div>
-  <p class="tofuman-note">Adopt records a container in the registry and writes the marker into its template, without a recreate. tofu can then import it by its name.</p>
-  <div class="TableContainer">
-    <table class="unraid tofuman-table">
-      <thead><tr><td><input type="checkbox" id="tofuman-select-all" title="Select every container that is ready to adopt"></td><td>Container</td><td>Image</td><td>Adoption</td><td></td></tr></thead>
-      <tbody id="tofuman-hand-made"></tbody>
-    </table>
+  <div class="tofuman-actions"><input type="button" id="tofuman-import-all" value="Import blocks for all"></div>
+  <div id="tofuman-import" class="tofuman-import" style="display:none">
+    <p class="tofuman-note">Paste these into the configuration, then run <span class="tofuman-mono">tofu plan -generate-config-out=generated.tf</span> once to write the matching HCL.</p>
+    <textarea readonly spellcheck="false"></textarea>
+    <input type="button" class="tofuman-copy" value="Copy"> <span class="tofuman-note"></span>
   </div>
 
-  <div class="tofuman-heading"><span><i class="fa fa-shield"></i>Policy</span></div>
-  <p class="tofuman-note">What a mutation may put into a template. An API key works only when its ID is on keyAllowlist; a refused request shows the ID of its key in the activity below.</p>
-  <div id="tofuman-gaps-box" style="display:none">
-    <p>What the containers need and the policy lacks:</p>
-    <ul id="tofuman-gaps"></ul>
-    <input type="button" id="tofuman-add-gaps" value="Add the selected entries to the editor" disabled> <span id="tofuman-gaps-note" class="tofuman-note"></span>
-  </div>
-  <textarea id="tofuman-policy" spellcheck="false"></textarea>
-  <ul id="tofuman-policy-errors" class="tofuman-list red-text"></ul>
-  <input type="button" id="tofuman-save" value="Save policy">
-  <span id="tofuman-saved" class="tofuman-note"></span>
+  <details>
+    <summary class="tofuman-heading"><i class="fa fa-chevron-right tofuman-chevron"></i><i class="fa fa-wrench"></i>Hand-made containers <span id="tofuman-hand-made-count" class="tofuman-count"></span></summary>
+    <p class="tofuman-note">Adopt records a container in the registry and writes the marker into its template, without a recreate. tofu can then import it by its name.</p>
+    <div class="TableContainer">
+      <table class="unraid tofuman-table">
+        <thead><tr><td><input type="checkbox" id="tofuman-select-all" title="Select every container that is ready to adopt"></td><td>Container</td><td>Image</td><td>Adoption</td></tr></thead>
+        <tbody id="tofuman-hand-made"></tbody>
+      </table>
+    </div>
+    <div class="tofuman-actions"><input type="button" id="tofuman-adopt-selected" value="Adopt selected" disabled></div>
+  </details>
 
-  <div class="tofuman-heading"><span><i class="fa fa-history"></i>Activity</span></div>
+  <details>
+    <summary class="tofuman-heading"><i class="fa fa-chevron-right tofuman-chevron"></i><i class="fa fa-shield"></i>Policy <span id="tofuman-policy-flags"></span></summary>
+    <p class="tofuman-note">What a mutation may put into a template. An API key works only when its ID is on keyAllowlist; a refused request shows the ID of its key in the activity below.</p>
+    <div id="tofuman-gaps-box" style="display:none">
+      <p>What the containers need and the policy lacks:</p>
+      <ul id="tofuman-gaps"></ul>
+      <div class="tofuman-actions"><input type="button" id="tofuman-add-gaps" value="Add the selected entries to the editor" disabled> <span id="tofuman-gaps-note" class="tofuman-note"></span></div>
+    </div>
+    <textarea id="tofuman-policy" spellcheck="false"></textarea>
+    <ul id="tofuman-policy-errors" class="tofuman-list red-text"></ul>
+    <div class="tofuman-actions"><input type="button" id="tofuman-save" value="Save policy"> <span id="tofuman-saved" class="tofuman-note"></span></div>
+  </details>
+
+  <div class="tofuman-heading"><i class="fa fa-history"></i>Activity</div>
   <p class="tofuman-note">The last 100 lines of the audit log. Select a line of a mutation to see its operation, step by step.</p>
   <div class="TableContainer">
     <table class="unraid tofuman-table">
@@ -123,6 +146,15 @@ Markdown="false"
 
   function cell(value, extra) {
     return $('<td>').text(text(value)).addClass(extra || '');
+  }
+
+  // REQ-TAB-39
+  function clamped(value, title) {
+    return $('<td class="tofuman-wrap">').attr('title', text(title)).append($('<div class="tofuman-clamp">').text(text(value)));
+  }
+
+  function count(n, one, many) {
+    return n + ' ' + (n === 1 ? one : many);
   }
 
   // REQ-TAB-18: the time since a moment, and the moment itself in UTC on hover
@@ -213,7 +245,7 @@ Markdown="false"
 
     var keys = state.keyAllowlistSize;
     $('#tofuman-keys').empty().append(keys
-      ? orb('green-orb', keys + (keys === 1 ? ' API key' : ' API keys') + ' on the allowlist')
+      ? orb('green-orb', count(keys, 'API key', 'API keys') + ' on the allowlist')
       : orb('yellow-orb', 'No API key on the allowlist: tofu cannot reach tofuman').attr('title', 'Create an API key with only DOCKER:CREATE_ANY in the webgui, and put its ID on keyAllowlist in the policy below.'));
     $('#tofuman-plugin').text(state.plugin ? 'Plugin ' + state.plugin : '');
 
@@ -240,26 +272,28 @@ Markdown="false"
     $('#tofuman-import-all').prop('disabled', !state.managed.length);
     $.each(state.managed, function (_, c) {
       var d = c.definition;
+      var open = openImport === c.id;
       var network = d.network + (d.ipAddresses.length ? ' · ' + d.ipAddresses.join(', ') : '');
       var template = c.changedSinceLastMutation
         ? $('<td class="orange-text">').text('changed in the webgui').attr('title', 'The template differs from what the last mutation wrote. The next tofu plan shows the difference as drift.')
         : $('<td class="green-text">').text('as tofu left it');
-      var hcl = $('<input type="button" value="Import block">').on('click', function () {
-        openImport = openImport === c.id ? null : c.id;
+      var hcl = $('<input type="button">').val(open ? 'Hide import block' : 'Import block').on('click', function () {
+        openImport = open ? null : c.id;
         renderManaged(last);
       });
-      body.append($('<tr>').append(container(d.name, c.tab.icon, c.running, c.tab.webUi), cell(d.repository).attr('title', d.repository),
+      body.append($('<tr>').toggleClass('tofuman-open', open).append(container(d.name, c.tab.icon, c.running, c.tab.webUi), cell(d.repository).attr('title', d.repository),
         cell(network), $('<td>').append(when(c.lastMutationAt)), template, cell(c.id.slice(0, 8), 'tofuman-mono').attr('title', c.id), $('<td>').append(hcl)));
-      if (openImport === c.id) {
+      if (open) {
         var box = $('<div class="tofuman-import">').append($('<textarea readonly spellcheck="false">').val(importBlock(d.name)),
           $('<input type="button" value="Copy">').on('click', function () { copy(box); }), ' ', $('<span class="tofuman-note">'));
         body.append($('<tr class="tofuman-detail">').append($('<td colspan="7">').append(box)));
       }
     });
-    if (!state.managed.length) body.append($('<tr>').append(cell('None yet. A tofu apply creates one, and Adopt below turns a hand-made one into one.').attr('colspan', 7)));
+    if (!state.managed.length) body.append($('<tr>').append(cell('None yet. A tofu apply creates one, and Adopt under Hand-made containers turns a hand-made one into one.').attr('colspan', 7)));
     $('#tofuman-import textarea').val($.map(state.managed, function (c) { return importBlock(c.definition.name); }).join('\n'));
   }
 
+  // REQ-TAB-4 and REQ-TAB-23
   function renderHandMade(state) {
     var body = $('#tofuman-hand-made').empty();
     $('#tofuman-hand-made-count').text('(' + state.handMade.length + ')');
@@ -273,17 +307,16 @@ Markdown="false"
         updateAdoptButton();
       });
       var verdict = ok ? $('<td class="green-text">').text('ready') : $('<td class="tofuman-wrap orange-text">').append($('<ul class="tofuman-list">').append($.map(c.refusals, function (r) { return $('<li>').text(r); })));
-      var adopt = $('<input type="button" value="Adopt">').prop('disabled', !ok).on('click', function () { adoptNames([c.name]); });
-      body.append($('<tr>').append($('<td>').append(tick), container(c.name, c.tab.icon, c.running, null), cell(c.image).attr('title', c.image), verdict, $('<td>').append(adopt)));
+      body.append($('<tr>').append($('<td>').append(tick), container(c.name, c.tab.icon, c.running, null), cell(c.image).attr('title', c.image), verdict));
     });
-    if (!state.handMade.length) body.append($('<tr>').append(cell('None.').attr('colspan', 5)));
+    if (!state.handMade.length) body.append($('<tr>').append(cell('None.').attr('colspan', 4)));
     $('#tofuman-select-all').prop('disabled', !ready).prop('checked', ready > 0 && Object.keys(selected).length === ready);
     updateAdoptButton();
   }
 
   function updateAdoptButton() {
-    var count = Object.keys(selected).length;
-    $('#tofuman-adopt-selected').prop('disabled', !count).val(count ? 'Adopt selected (' + count + ')' : 'Adopt selected');
+    var n = Object.keys(selected).length;
+    $('#tofuman-adopt-selected').prop('disabled', !n).val(n ? 'Adopt selected (' + n + ')' : 'Adopt selected');
   }
 
   // REQ-TAB-24
@@ -316,6 +349,7 @@ Markdown="false"
     }
   }
 
+  // returns how many entries the policy lacks
   function renderGaps(state) {
     var gaps = {};
     $.each(state.gaps.managed, function (_, gap) {
@@ -343,6 +377,7 @@ Markdown="false"
     });
     $('#tofuman-gaps-box').toggle(keys.length > 0);
     $('#tofuman-add-gaps').prop('disabled', !Object.keys(chosenGaps).length);
+    return keys.length;
   }
 
   function addGaps() {
@@ -379,6 +414,14 @@ Markdown="false"
       $('#tofuman-policy').val(state.policy.text || '');
       $('#tofuman-policy-errors').empty().append($.map(state.policy.errors || [], function (e) { return $('<li>').text(e); }));
     }
+  }
+
+  // REQ-TAB-37: what a closed policy section hides, from the saved policy
+  function renderPolicyFlags(state, missing) {
+    var errors = (state.policy.errors || []).length;
+    var flags = $('#tofuman-policy-flags').empty();
+    if (errors) flags.append($('<span class="tofuman-flag red-text">').text(count(errors, 'error', 'errors')));
+    if (missing) flags.append($('<span class="tofuman-flag orange-text">').text(count(missing, 'entry', 'entries') + ' missing'));
   }
 
   // REQ-TAB-30
@@ -418,22 +461,26 @@ Markdown="false"
     });
   }
 
+  // REQ-TAB-40: a chevron on each line that opens an operation, and the open line highlighted
   function renderAudit(state) {
     var body = $('#tofuman-audit').empty();
     $.each(state.audit.slice().reverse(), function (_, line) {
       var caller = line.callerName && line.callerName !== line.caller ? line.caller + ' (' + line.callerName + ')' : line.caller;
       var result = cell(line.result, line.result === 'succeeded' ? 'green-text' : (line.result === 'failed' ? 'red-text' : 'orange-text'));
       var changes = line.changes || [];
-      var row = $('<tr>').append($('<td>').append(when(line.time)), cell(caller, 'tofuman-mono').attr('title', (line.providerVersion ? 'provider ' + line.providerVersion : '')),
-        cell(line.action), cell(line.name), result, cell(took(line.durationMs)), cell(changes.join(', ')).attr('title', changes.join('\n')), cell(line.error).attr('title', text(line.error)));
+      var open = !!line.operationId && openOperation === line.operationId;
+      var chevron = $('<i class="fa tofuman-chevron">').toggleClass('fa-chevron-right', !!line.operationId);
+      var row = $('<tr>').append($('<td>').append(chevron, when(line.time)), cell(caller, 'tofuman-mono').attr('title', (line.providerVersion ? 'provider ' + line.providerVersion : '')),
+        cell(line.action), cell(line.name), result, cell(took(line.durationMs)), clamped(changes.join(', '), changes.join('\n')), clamped(line.error, line.error).addClass('tofuman-error'));
       body.append(row);
       if (line.operationId) {
-        row.addClass('tofuman-clickable').attr('title', 'Show the operation').on('click', function () {
-          openOperation = openOperation === line.operationId ? null : line.operationId;
+        row.addClass('tofuman-clickable').toggleClass('tofuman-open', open).attr('title', open ? 'Hide the operation' : 'Show the operation').on('click', function () {
+          if (!window.getSelection().isCollapsed) return; // text selected to copy, not a click
+          openOperation = open ? null : line.operationId;
           if (openOperation && operations[openOperation] === undefined) fetchOperation(openOperation);
           renderAudit(last);
         });
-        if (openOperation === line.operationId) renderOperation(row, line.operationId);
+        if (open) renderOperation(row, line.operationId);
       }
     });
     if (!state.audit.length) body.append($('<tr>').append(cell('Empty.').attr('colspan', 8)));
@@ -444,7 +491,7 @@ Markdown="false"
     renderStatus(state);
     renderManaged(state);
     renderHandMade(state);
-    renderGaps(state);
+    renderPolicyFlags(state, renderGaps(state));
     renderPolicy(state);
     renderAudit(state);
   }
@@ -493,7 +540,10 @@ Markdown="false"
     $.each(last ? last.handMade : [], function (_, c) { if (!c.refusals.length) { if (on) selected[c.name] = true; else delete selected[c.name]; } });
     renderHandMade(last);
   });
-  $('#tofuman-import-all').on('click', function () { $('#tofuman-import').toggle(); });
+  $('#tofuman-import-all').on('click', function () {
+    var box = $('#tofuman-import').toggle();
+    $(this).val(box.is(':visible') ? 'Hide import blocks' : 'Import blocks for all');
+  });
   $('#tofuman-import .tofuman-copy').on('click', function () { copy($('#tofuman-import')); });
 
   load();

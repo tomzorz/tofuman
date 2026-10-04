@@ -171,7 +171,7 @@ Confirm-Step 'Step 10. In the webgui, check that tofuman-e2e2 is gone from the D
 
 # Step 11
 Write-Host ''
-Write-Host 'Step 11. In the webgui, create a throwaway container with Add Container (a small image, no masked variables), then select Adopt for it on the tofuman tab.'
+Write-Host 'Step 11. In the webgui, create a throwaway container with Add Container (a small image, no masked variables). Then on the tofuman tab, open Hand-made containers, tick it, and select Adopt selected.'
 $adopted = Read-Host '  Its name'
 if (-not $adopted) { Stop-Run '11: a hand-made container to adopt' }
 Write-Pass "11: $adopted is adopted in the tab"

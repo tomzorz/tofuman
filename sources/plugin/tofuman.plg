@@ -16,6 +16,12 @@
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" support="https://github.com/&github;/issues" icon="code" launch="Docker" min="7.3.2">
 
 <CHANGES>
+### 2026.10.05
+- Hand-made containers and Policy fold away and start closed. Their headings show the count, and Policy says how many entries it lacks.
+- Adopt selected and Import blocks for all sit below their tables, as on the Docker page, and the Adopt button of each row is gone.
+- Long changes and errors in the activity wrap inside their cells, three lines at most; the whole text shows on hover and in the operation.
+- A chevron marks each activity line that opens an operation, the open line stands out, and the operation below it no longer lights up under the pointer.
+
 ### 2026.10.04
 - tofu plan names each check that the server would refuse, before anything changes (with provider 0.2.0).
 - A container that stops or restarts within its start check (10 seconds unless start_check says otherwise) fails the apply with its exit code and last log lines; an update puts the previous container back.
