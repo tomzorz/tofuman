@@ -4,12 +4,12 @@
 // unraid-api 4.37.4 and later deny a handler without permission metadata, and unraid-api runs
 // its guards on field resolvers too.
 
-import { Args, Context, ID, Mutation, Query, ResolveField, Resolver } from '@nestjs/graphql';
+import { Args, Context, ID, Int, Mutation, Query, ResolveField, Resolver } from '@nestjs/graphql';
 import { AuthAction, Resource, UsePermissions } from '@unraid/shared/use-permissions.directive.js';
 
 import { callerFrom } from './caller.js';
-import { TofumanContainer, TofumanDefinitionInput, TofumanMutation, TofumanOperation, TofumanQuery } from './model.js';
-import { TofumanService } from './service.js';
+import { TofumanCheck, TofumanContainer, TofumanDefinitionInput, TofumanMutation, TofumanOperation, TofumanQuery } from './model.js';
+import { START_CHECK_DEFAULT, TofumanService } from './service.js';
 import { parseDefinition } from './shapes.js';
 
 /** DOCKER:CREATE_ANY, which no official handler of unraid-api uses (spec section 8). */
@@ -55,6 +55,19 @@ export class TofumanQueryResolver {
   operation(@Args('id', { type: () => ID }) id: string, @Context() context: unknown): Promise<TofumanOperation> {
     return this.service.operation(id, callerFrom(context));
   }
+
+  // The definition arrives as `unknown`; see TofumanMutationResolver.
+  @ResolveField(() => TofumanCheck, {
+    description: 'The checks of a mutation, without the mutation: a definition alone checks createContainer, an id and a definition check updateContainer, and an id alone checks deleteContainer.',
+  })
+  @UsePermissions(PERMISSION)
+  check(
+    @Args('id', { type: () => ID, nullable: true }) id: string | null | undefined,
+    @Args('definition', { type: () => TofumanDefinitionInput, nullable: true }) definition: unknown,
+    @Context() context: unknown,
+  ): Promise<TofumanCheck> {
+    return this.service.check(id ?? null, definition === null || definition === undefined ? null : parseDefinition(definition), callerFrom(context));
+  }
 }
 
 // The definition arrives as `unknown`, not as TofumanDefinitionInput. unraid-api runs a global
@@ -67,8 +80,12 @@ export class TofumanMutationResolver {
 
   @ResolveField(() => TofumanOperation)
   @UsePermissions(PERMISSION)
-  createContainer(@Args('definition', { type: () => TofumanDefinitionInput }) definition: unknown, @Context() context: unknown): Promise<TofumanOperation> {
-    return this.service.create(parseDefinition(definition), callerFrom(context));
+  createContainer(
+    @Args('definition', { type: () => TofumanDefinitionInput }) definition: unknown,
+    @Args('startCheckSeconds', { type: () => Int, defaultValue: START_CHECK_DEFAULT }) startCheckSeconds: number,
+    @Context() context: unknown,
+  ): Promise<TofumanOperation> {
+    return this.service.create(parseDefinition(definition), startCheckSeconds, callerFrom(context));
   }
 
   @ResolveField(() => TofumanOperation)
@@ -76,9 +93,10 @@ export class TofumanMutationResolver {
   updateContainer(
     @Args('id', { type: () => ID }) id: string,
     @Args('definition', { type: () => TofumanDefinitionInput }) definition: unknown,
+    @Args('startCheckSeconds', { type: () => Int, defaultValue: START_CHECK_DEFAULT }) startCheckSeconds: number,
     @Context() context: unknown,
   ): Promise<TofumanOperation> {
-    return this.service.update(id, parseDefinition(definition), callerFrom(context));
+    return this.service.update(id, parseDefinition(definition), startCheckSeconds, callerFrom(context));
   }
 
   @ResolveField(() => TofumanOperation)

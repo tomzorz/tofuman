@@ -19,11 +19,14 @@ export const adapter = 'nestjs';
   ],
 })
 class TofumanApiModule implements OnModuleInit {
+  constructor(private readonly service: TofumanService) {}
+
   onModuleInit(): void {
     const problem = recordLoad(process.env['TOFUMAN_LOADED_FILE'] ?? LOADED_FILE, moduleVersion(), process.pid, new Date());
     if (problem !== null) {
       new Logger('tofuman').warn(problem);
     }
+    void this.service.startup(); // REQ-UPG-7, in the background: unraid-api does not wait for the shim
   }
 }
 

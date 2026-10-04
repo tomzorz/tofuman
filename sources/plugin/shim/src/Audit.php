@@ -11,17 +11,25 @@ final class Audit {
 
   public function __construct(private readonly string $file) {}
 
-  public function append(array $caller, string $action, ?string $managedId, string $name, string $result, ?string $error): void {
+  /**
+   * @param ?OperationLog $operation the operation of the mutation, for its ID and its duration
+   * @param list<string> $changes REQ-FILE-4: the names of what an updateContainer changed
+   */
+  public function append(array $caller, string $action, ?string $managedId, string $name, string $result, ?string $error, ?OperationLog $operation = null, array $changes = []): void {
     $lines = $this->lines();
     $lines[] = json_encode([
       'time' => Registry::now(),
       'caller' => (string)($caller['id'] ?? 'unknown'),
       'callerName' => (string)($caller['name'] ?? ''),
+      'providerVersion' => is_string($caller['providerVersion'] ?? null) ? $caller['providerVersion'] : null,
       'action' => $action,
       'managedId' => $managedId,
       'name' => $name,
       'result' => $result,
-      'error' => $error,
+      'error' => $error === null || $operation === null ? $error : $operation->mask($error),
+      'operationId' => $operation?->id(),
+      'durationMs' => $operation?->durationMs(),
+      'changes' => $changes,
     ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
     if (!is_dir(dirname($this->file))) {
       mkdir(dirname($this->file), 0755, true);

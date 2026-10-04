@@ -36,7 +36,7 @@ test('the pipe passes every argument of every handler', async () => {
       const list: unknown[] = types;
       for (const [index, metatype] of list.entries()) {
         assert.ok(isType(metatype), `argument ${index} of ${resolver.name}.${method} has no type`);
-        const value = metatype === String ? 'example' : definition;
+        const value = metatype === String ? 'example' : metatype === Number ? 10 : definition;
         await assert.doesNotReject(pipe.transform(value, { type: 'body', metatype, data: undefined }), `the pipe rejects argument ${index} of ${resolver.name}.${method}`);
       }
     }

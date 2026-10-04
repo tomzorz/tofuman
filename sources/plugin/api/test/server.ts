@@ -20,17 +20,21 @@ import { moduleSchema } from './schema.js';
 
 const PORT = 8931;
 const API_KEY = process.env['TOFUMAN_TEST_API_KEY'] ?? '';
-const CALLER: Caller = { id: '11111111-1111-4111-8111-111111111111', name: 'provider-tests', admin: false };
+const CALLER: Caller = { id: '11111111-1111-4111-8111-111111111111', name: 'provider-tests', admin: false, providerVersion: null };
 
 if (API_KEY === '') {
   throw new Error('the test server needs TOFUMAN_TEST_API_KEY');
 }
 
 // The policy of the provider tests: their caller on the key allowlist, bind mounts under
-// /mnt/tofumantest/, and the test network next to bridge.
+// /mnt/tofumantest/, and the test network next to bridge. The notifications of failed
+// operations go to the recorder of the shim tests, not into the webgui's notify script.
 const data = mkdtempSync(join(tmpdir(), 'tofumantest-server-'));
 process.env['TOFUMAN_DATA_DIR'] = data;
 process.env['TOFUMAN_LOCK'] = join(data, 'lock');
+process.env['TOFUMAN_RUN_DIR'] = data;
+process.env['TOFUMAN_NOTIFY'] = '/usr/local/emhttp/plugins/tofuman/tests/fixtures/notify.php';
+process.env['TOFUMAN_NOTIFY_LOG'] = join(data, 'notifications.log');
 writeFileSync(join(data, 'policy.json'), JSON.stringify({
   version: 1,
   keyAllowlist: [CALLER.id],
@@ -55,6 +59,15 @@ function text(args: Record<string, unknown>, key: string): string {
 function optionalText(args: Record<string, unknown>, key: string): string | null {
   const value = args[key];
   return typeof value === 'string' ? value : null;
+}
+
+/** The schema gives startCheckSeconds its default, so it always arrives as a number. */
+function integer(args: Record<string, unknown>, key: string): number {
+  const value = args[key];
+  if (typeof value !== 'number') {
+    throw new GraphQLError(`the argument ${key} is not a number`);
+  }
+  return value;
 }
 
 type Resolver = (source: unknown, args: Record<string, unknown>, context: Context) => unknown;
@@ -82,10 +95,14 @@ resolve(schema.getType('TofumanQuery'), {
   container: (_source, args, context) => service.get(optionalText(args, 'id'), optionalText(args, 'name'), context.caller),
   containers: (_source, _args, context) => service.list(context.caller),
   operation: (_source, args, context) => service.operation(text(args, 'id'), context.caller),
+  check: (_source, args, context) => {
+    const definition = args['definition'];
+    return service.check(optionalText(args, 'id'), definition === null || definition === undefined ? null : parseDefinition(definition), context.caller);
+  },
 });
 resolve(schema.getType('TofumanMutation'), {
-  createContainer: (_source, args, context) => service.create(parseDefinition(args['definition']), context.caller),
-  updateContainer: (_source, args, context) => service.update(text(args, 'id'), parseDefinition(args['definition']), context.caller),
+  createContainer: (_source, args, context) => service.create(parseDefinition(args['definition']), integer(args, 'startCheckSeconds'), context.caller),
+  updateContainer: (_source, args, context) => service.update(text(args, 'id'), parseDefinition(args['definition']), integer(args, 'startCheckSeconds'), context.caller),
   deleteContainer: (_source, args, context) => service.delete(text(args, 'id'), context.caller),
 });
 
@@ -132,10 +149,11 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
   }
   const variables = payload['variables'];
   const operationName = payload['operationName'];
+  const version = request.headers['x-tofuman-provider'];
   const result = await graphql({
     schema,
     source: payload['query'],
-    contextValue: { caller: CALLER },
+    contextValue: { caller: { ...CALLER, providerVersion: typeof version === 'string' ? version : null } },
     variableValues: isRecord(variables) ? variables : null,
     operationName: typeof operationName === 'string' ? operationName : null,
   });

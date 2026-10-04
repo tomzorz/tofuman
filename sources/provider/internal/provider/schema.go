@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -55,6 +56,9 @@ func containerSchema() schema.Schema {
 			"donate_text":  optionalString("The template element DonateText.", ""),
 			"donate_link":  optionalString("The template element DonateLink, an http or https URL.", ""),
 			"requires":     optionalString("The template element Requires.", ""),
+			"start_check": optionalString("How long the server watches a container that an apply starts, as a duration from 0s to 10m. If the container stops or restarts in that time, "+
+				"the apply fails with its last log lines, and an update puts the previous container back. 0s turns the check off, for a container that ends on its own. "+
+				"It is not part of the template, so a change of it alone changes nothing on the server.", defaultStartCheck, startCheck{}),
 		},
 		Blocks: map[string]schema.Block{
 			"path": entryBlock("A bind mount, a config entry of type Path. host_path must lie under a bind root of the policy on the server, on a filesystem other than the root filesystem.", "container_path", map[string]schema.Attribute{
@@ -159,6 +163,27 @@ func (v oneOf) ValidateString(_ context.Context, req validator.StringRequest, re
 		return
 	}
 	resp.Diagnostics.AddAttributeError(req.Path, "Invalid value", fmt.Sprintf("The value must be one of %s, got %q.", strings.Join(v, ", "), req.ConfigValue.ValueString()))
+}
+
+// startCheck accepts a whole number of seconds from 0s to 10m, the bounds of REQ-MUT-16.
+type startCheck struct{}
+
+func (startCheck) Description(context.Context) string {
+	return "a duration of whole seconds from 0s to 10m"
+}
+
+func (v startCheck) MarkdownDescription(ctx context.Context) string {
+	return v.Description(ctx)
+}
+
+func (startCheck) ValidateString(_ context.Context, req validator.StringRequest, resp *validator.StringResponse) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+	duration, err := time.ParseDuration(req.ConfigValue.ValueString())
+	if err != nil || duration < 0 || duration > 10*time.Minute || duration%time.Second != 0 {
+		resp.Diagnostics.AddAttributeError(req.Path, "Invalid start check", fmt.Sprintf("start_check takes whole seconds from 0s to 10m, such as 30s or 2m, got %q.", req.ConfigValue.ValueString()))
+	}
 }
 
 var macPattern = regexp.MustCompile(`^([0-9a-f]{2}:){5}[0-9a-f]{2}$`)

@@ -144,6 +144,7 @@ func (p *tofumanProvider) Configure(ctx context.Context, req provider.ConfigureR
 		APIKey:        apiKey,
 		CACertificate: setting(config.CACertificate, "TOFUMAN_CA_CERTIFICATE"),
 		Insecure:      insecure,
+		Version:       p.version,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Invalid provider configuration", err.Error())

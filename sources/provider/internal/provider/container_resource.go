@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/tomzorz/tofuman/sources/provider/internal/client"
 )
@@ -22,6 +24,7 @@ var (
 	_ resource.ResourceWithConfigure      = &containerResource{}
 	_ resource.ResourceWithImportState    = &containerResource{}
 	_ resource.ResourceWithValidateConfig = &containerResource{}
+	_ resource.ResourceWithModifyPlan     = &containerResource{}
 )
 
 type containerResource struct {
@@ -81,6 +84,90 @@ func (r *containerResource) ValidateConfig(ctx context.Context, req resource.Val
 	}
 }
 
+// ModifyPlan asks the server which checks the planned mutation would fail, so that a refusal
+// shows in the plan instead of halfway through an apply (REQ-PRV-15, REQ-PRV-16).
+func (r *containerResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if r.data == nil {
+		return // the provider is not configured yet, as during validation
+	}
+	var state *containerModel
+	if !req.State.Raw.IsNull() {
+		state = &containerModel{}
+		resp.Diagnostics.Append(req.State.Get(ctx, state)...)
+	}
+	if req.Plan.Raw.IsNull() {
+		if state != nil {
+			id := state.ID.ValueString()
+			r.check(ctx, &id, nil, "delete "+state.Name.ValueString(), &resp.Diagnostics)
+		}
+		return
+	}
+	if !knownExceptID(req.Plan.Raw) {
+		return // REQ-PRV-16: an unknown value leaves nothing to check yet
+	}
+	var plan containerModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	definition, diags := plan.definition(ctx)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if state == nil {
+		r.check(ctx, nil, &definition, "create "+definition.Name, &resp.Diagnostics)
+		return
+	}
+	current, diags := state.definition(ctx)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() || reflect.DeepEqual(definition, current) {
+		return // no mutation is planned, at most a new start_check (REQ-PRV-20)
+	}
+	id := state.ID.ValueString()
+	r.check(ctx, &id, &definition, "update "+state.Name.ValueString(), &resp.Diagnostics)
+}
+
+// knownExceptID reports whether every value of a planned resource is known, apart from the
+// managed ID, which a create always leaves unknown.
+func knownExceptID(raw tftypes.Value) bool {
+	known := true
+	_ = tftypes.Walk(raw, func(at *tftypes.AttributePath, value tftypes.Value) (bool, error) {
+		steps := at.Steps()
+		if len(steps) == 1 && steps[0] == tftypes.AttributeName("id") {
+			return false, nil
+		}
+		if !value.IsKnown() {
+			known = false
+			return false, nil
+		}
+		return true, nil
+	})
+	return known
+}
+
+// check turns the failed checks of a planned mutation into errors of the plan.
+func (r *containerResource) check(ctx context.Context, id *string, definition *client.Definition, action string, diags *diag.Diagnostics) {
+	result, err := r.data.client.Check(ctx, id, definition)
+	var answer *client.Error
+	if errors.As(err, &answer) && answer.Code == "GRAPHQL_VALIDATION_FAILED" {
+		diags.AddWarning("The plugin on the server cannot check a plan", "The tofuman plugin on the server predates the checks at plan time, so a refusal shows only during the apply. Update the plugin in the webgui.")
+		return
+	}
+	if err != nil {
+		addError(diags, "check the plan to "+action, err)
+		return
+	}
+	if len(result.FailedChecks) > 0 {
+		diags.AddError("tofuman would refuse to "+action, "The server refuses this change as it stands. Each failed check:\n- "+strings.Join(result.FailedChecks, "\n- ")+policyHint(result.PolicyGaps))
+	}
+}
+
+// policyHint is what a person does about a policy gap (REQ-PRV-18).
+func policyHint(gaps int) string {
+	if gaps == 0 {
+		return ""
+	}
+	return "\n\nA person adds what the policy lacks on the tofuman tab of the Docker page in the webgui, which lists each missing entry."
+}
+
 func (r *containerResource) configured(diags *diag.Diagnostics) bool {
 	if r.data == nil {
 		diags.AddError("Unconfigured provider", "The tofuman provider has no configuration. Set endpoint and api_key in the provider block, or TOFUMAN_ENDPOINT and TOFUMAN_API_KEY.")
@@ -98,14 +185,14 @@ func addError(diags *diag.Diagnostics, action string, err error) {
 		if len(checks) == 0 {
 			checks = []string{answer.Message}
 		}
-		diags.AddError("tofuman refused to "+action, "Nothing changed on the server. Each failed check:\n- "+strings.Join(checks, "\n- "))
+		diags.AddError("tofuman refused to "+action, "Nothing changed on the server. Each failed check:\n- "+strings.Join(checks, "\n- ")+policyHint(answer.PolicyGaps))
 		return
 	}
 	diags.AddError("Could not "+action, err.Error())
 }
 
 // finish waits for an operation and puts the container it leaves behind into state.
-func (r *containerResource) finish(ctx context.Context, action string, operation *client.Operation, state *tfsdk.State, diags *diag.Diagnostics) {
+func (r *containerResource) finish(ctx context.Context, action string, operation *client.Operation, startCheck types.String, state *tfsdk.State, diags *diag.Diagnostics) {
 	done, err := r.data.client.Wait(ctx, operation, r.data.timeout)
 	if err != nil {
 		addError(diags, action, err)
@@ -115,12 +202,22 @@ func (r *containerResource) finish(ctx context.Context, action string, operation
 		diags.AddError("Could not "+action, fmt.Sprintf("Operation %s succeeded without a container.", done.ID))
 		return
 	}
-	model, d := modelFrom(ctx, done.Container)
+	model, d := modelFrom(ctx, done.Container, startCheck)
 	diags.Append(d...)
 	if diags.HasError() {
 		return
 	}
 	diags.Append(state.Set(ctx, &model)...)
+}
+
+// startCheckArgument is the start check that a mutation names. The default goes unnamed, so a
+// plugin from before the start check still takes the mutation (REQ-MUT-16 has the same default).
+func startCheckArgument(value types.String) *int {
+	if knownOr(value, defaultStartCheck).ValueString() == defaultStartCheck {
+		return nil
+	}
+	seconds := startCheckSeconds(value)
+	return &seconds
 }
 
 func (r *containerResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -134,12 +231,12 @@ func (r *containerResource) Create(ctx context.Context, req resource.CreateReque
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	operation, err := r.data.client.Create(ctx, definition)
+	operation, err := r.data.client.Create(ctx, definition, startCheckArgument(plan.StartCheck))
 	if err != nil {
 		addError(&resp.Diagnostics, "create "+definition.Name, err)
 		return
 	}
-	r.finish(ctx, "create "+definition.Name, operation, &resp.State, &resp.Diagnostics)
+	r.finish(ctx, "create "+definition.Name, operation, plan.StartCheck, &resp.State, &resp.Diagnostics)
 }
 
 func (r *containerResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -160,7 +257,7 @@ func (r *containerResource) Read(ctx context.Context, req resource.ReadRequest, 
 		resp.State.RemoveResource(ctx) // REQ-PRV-10
 		return
 	}
-	model, diags := modelFrom(ctx, container)
+	model, diags := modelFrom(ctx, container, state.StartCheck)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -177,15 +274,22 @@ func (r *containerResource) Update(ctx context.Context, req resource.UpdateReque
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	definition, diags := plan.definition(ctx)
 	resp.Diagnostics.Append(diags...)
+	current, diags := state.definition(ctx)
+	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	operation, err := r.data.client.Update(ctx, state.ID.ValueString(), definition)
+	if reflect.DeepEqual(definition, current) {
+		state.StartCheck = plan.StartCheck // REQ-PRV-20: the template stays as it is
+		resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+		return
+	}
+	operation, err := r.data.client.Update(ctx, state.ID.ValueString(), definition, startCheckArgument(plan.StartCheck))
 	if err != nil {
 		addError(&resp.Diagnostics, "update "+state.Name.ValueString(), err)
 		return
 	}
-	r.finish(ctx, "update "+state.Name.ValueString(), operation, &resp.State, &resp.Diagnostics)
+	r.finish(ctx, "update "+state.Name.ValueString(), operation, plan.StartCheck, &resp.State, &resp.Diagnostics)
 }
 
 func (r *containerResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {

@@ -181,6 +181,23 @@ export function parseContainerView(value: unknown, at = 'container'): ContainerV
   };
 }
 
+/** The answer of the query `check` (REQ-MUT-25). */
+export interface CheckView {
+  failedChecks: string[];
+  policyGaps: number;
+}
+
+export function parseCheck(value: unknown): CheckView {
+  if (!isRecord(value)) {
+    throw new ShapeError('check is not an object');
+  }
+  const policyGaps = value['policyGaps'];
+  if (typeof policyGaps !== 'number' || !Number.isInteger(policyGaps)) {
+    throw new ShapeError('check.policyGaps is not an integer');
+  }
+  return { failedChecks: texts(value, 'failedChecks', 'check'), policyGaps };
+}
+
 export function parseContainerViews(value: unknown): ContainerView[] {
   if (!Array.isArray(value)) {
     throw new ShapeError('the list of containers is not a list');

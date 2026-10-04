@@ -43,6 +43,10 @@ function test_flags_parse_and_refuse(): void {
   refuses(fn() => Flags::parse(['--user']), '--user needs a value');
   refuses(fn() => Flags::parse(['--init=yes']), '--init takes no value');
   refuses(fn() => Flags::parse(['sleep']), "'sleep' is not a flag");
+  // REQ-VAL-21: --ipc takes host alone, and an exception of the policy decides on that (REQ-POL-11)
+  same([['--ipc', 'host'], ['--ipc', 'host']], Flags::parse(['--ipc', 'host', '--ipc=host']));
+  refuses(fn() => Flags::parse(['--ipc=private']), '--ipc takes only the value host');
+  refuses(fn() => Flags::parse(['--ipc']), '--ipc needs a value');
 }
 
 function test_json_canonical_form(): void {
@@ -93,6 +97,34 @@ function test_policy_validation(): void {
   $errors = Policy::validate(array_replace($defaults, ['bindRoots' => ['relative/'], 'extraParamFlags' => ['--link'], 'keyAllowlist' => ['nope']]));
   same(3, count($errors), 'errors for a bad bindRoots, a bad flag, and a bad key: ' . implode('; ', $errors));
   refuses(fn() => Policy::load('/nonexistent/policy.json'), 'does not exist');
+  same(['extraParamFlags: --ipc belongs in exceptions, as "ipcHost": true for each container that needs it'], Policy::validate(array_replace($defaults, ['extraParamFlags' => ['--ipc']])));
+  same([], Policy::validate(array_replace($defaults, ['exceptions' => ['gpu' => ['ipcHost' => true]]])), 'an ipcHost exception');
+  same(['exceptions.gpu.ipcHost must be a boolean'], Policy::validate(array_replace($defaults, ['exceptions' => ['gpu' => ['ipcHost' => 'yes']]])));
+}
+
+/** REQ-TAB-26 and REQ-TAB-29: each gap says what to add, and a bind root comes as a proposal. */
+function test_policy_gaps_say_what_to_add(): void {
+  $env = make_env();
+  write_policy($env, ['extraParamFlags' => ['--hostname']]);
+  $policy = Policy::load($env->policyFile());
+  same([], $policy->gaps(Definition::normalize(definition())));
+  $gaps = $policy->gaps(Definition::normalize(definition([
+    'name' => 'tofumantest-gpu',
+    'network' => 'tofumantest-other',
+    'extraParams' => ['--hostname', 'a', '--gpus', 'all', '--ipc', 'host'],
+    'configEntries' => [entry('PATH', 'Models', '/models', '/mnt/tofumantest-pool/models/llm', '', 'ro')],
+  ])));
+  same([
+    ['bindRoot', '/mnt/tofumantest-pool/models/'],
+    ['network', 'tofumantest-other'],
+    ['flag', '--gpus'],
+    ['ipcHost', 'true'],
+  ], array_map(fn(array $gap) => [$gap['kind'], $gap['value']], $gaps));
+  same(['tofumantest-gpu'], array_values(array_unique(array_column($gaps, 'container'))));
+  same('/mnt/user/appdata/', Policy::proposedRoot('/mnt/user/appdata/example/config'));
+  same('/mnt/remotes/media/', Policy::proposedRoot('/mnt/remotes/media'));
+  write_policy($env, ['extraParamFlags' => ['--hostname', '--gpus'], 'exceptions' => ['tofumantest-gpu' => ['ipcHost' => true]]]);
+  same([], array_filter(Policy::load($env->policyFile())->gaps(Definition::normalize(definition(['name' => 'tofumantest-gpu', 'extraParams' => ['--gpus', 'all', '--ipc=host']])))), 'gaps that the policy now covers');
 }
 
 function test_policy_checks_each_rule(): void {
@@ -235,7 +267,7 @@ function test_the_tab_saves_only_a_valid_policy(): void {
 function test_shim_speaks_json_on_stdin_and_stdout(): void {
   $env = make_env();
   $ask = function (array $request) use ($env): array {
-    $process = proc_open(['php', dirname(__DIR__) . '/shim/tofuman-shim.php'], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, null, getenv() + ['TOFUMAN_DATA_DIR' => $env->dataDir, 'TOFUMAN_LOCK' => $env->lockFile]);
+    $process = proc_open(['php', dirname(__DIR__) . '/shim/tofuman-shim.php'], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, null, shim_environment($env));
     fwrite($pipes[0], json_encode($request));
     fclose($pipes[0]);
     $stdout = stream_get_contents($pipes[1]);
@@ -248,13 +280,61 @@ function test_shim_speaks_json_on_stdin_and_stdout(): void {
   same(['ok' => true, 'result' => true], $ask(['action' => 'initPolicy']));
   same(['ok' => true, 'result' => false], $ask(['action' => 'initPolicy']), 'a second init');
   $state = $ask(['action' => 'tabState', 'caller' => caller(true)]);
-  same(['managed', 'handMade', 'policy', 'audit', 'testedBuild', 'apiModule'], array_keys($state['result'] ?? []), 'the parts of the tab state');
+  same(['plugin', 'managed', 'handMade', 'policy', 'keyAllowlistSize', 'gaps', 'audit', 'running', 'stats', 'testedBuild', 'apiModule'], array_keys($state['result'] ?? []), 'the parts of the tab state');
   same([], $state['result']['policy']['errors'], 'the default policy');
   same(['ok' => true, 'result' => []], $ask(['action' => 'list', 'caller' => caller(true)]));
-  same(['ok' => false, 'refused' => true, 'errors' => ['the caller x is not on the key allowlist']], $ask(['action' => 'list', 'caller' => ['id' => 'x', 'name' => 'stranger', 'admin' => false]]));
+  same(['ok' => false, 'refused' => true, 'errors' => ['the caller x is not on the key allowlist'], 'policyGaps' => 0], $ask(['action' => 'list', 'caller' => ['id' => 'x', 'name' => 'stranger', 'admin' => false]]));
   same(['ok' => true, 'result' => []], $ask(['action' => 'validatePolicy', 'args' => ['policy' => Tofuman\Json::read($env->policyFile())]]));
   same('unraid-7.3.2', $ask(['action' => 'testedBuild'])['result']['match']);
   $refused = $ask(['action' => 'check', 'args' => ['mutation' => 'createContainer', 'definition' => definition()], 'caller' => ['id' => 'x', 'name' => 'stranger', 'admin' => false]]);
   same([false, true], [$refused['ok'], $refused['refused']]);
-  same(['ok' => false, 'refused' => true, 'errors' => ['unknown action "nope"']], $ask(['action' => 'nope']));
+  same(['ok' => false, 'refused' => true, 'errors' => ['unknown action "nope"'], 'policyGaps' => 0], $ask(['action' => 'nope']));
+  same(['ok' => true, 'result' => ['tested' => true]], $ask(['action' => 'startup']));
+  same([], notifications($env), 'a startup on a tested build raised a notification');
+}
+
+/** REQ-MUT-26: the shared default icon of DockerMan survives the removal of a container. */
+function test_the_shared_default_icon_stays(): void {
+  global $dockerManPaths;
+  $saved = $dockerManPaths['webui-info'];
+  $dockerManPaths['webui-info'] = sys_get_temp_dir() . '/tofumantest-webui-' . bin2hex(random_bytes(4)) . '.json';
+  try {
+    file_put_contents($dockerManPaths['webui-info'], json_encode([
+      'tofumantest-plain' => ['icon' => Tofuman\Docker::DEFAULT_ICON],
+      'tofumantest-own' => ['icon' => '/state/plugins/dynamix.docker.manager/images/tofumantest-own-icon.png'],
+    ]));
+    same(0, Tofuman\Docker::iconCacheLevel('tofumantest-plain'), 'the cache level for a container with the shared icon');
+    same(1, Tofuman\Docker::iconCacheLevel('tofumantest-own'), 'the cache level for a container with an icon of its own');
+    same(1, Tofuman\Docker::iconCacheLevel('tofumantest-unknown'), 'the cache level for a container the Docker page never showed');
+  } finally {
+    @unlink($dockerManPaths['webui-info']);
+    $dockerManPaths['webui-info'] = $saved;
+  }
+}
+
+/** REQ-FILE-6 and REQ-FILE-7: a masked value leaves the operation log, the errors, and the diagnostics file. */
+function test_secrets_mask_quoted_and_free_text(): void {
+  $secrets = Tofuman\Secrets::of(definition());
+  same(['hunter2'], $secrets);
+  same("docker create -e 'SECRET'='***' -e 'TZ'='Etc/UTC'", Tofuman\Secrets::mask("docker create -e 'SECRET'='hunter2' -e 'TZ'='Etc/UTC'", $secrets));
+  same('the token *** was refused', Tofuman\Secrets::mask('the token hunter2 was refused', $secrets));
+  same('port 80 and 1', Tofuman\Secrets::mask('port 80 and 1', ['1']), 'a value under 4 characters stays in free text');
+  same('***', Tofuman\Secrets::maskDefinition(definition())['configEntries'][3]['value']);
+}
+
+/** REQ-FILE-4 and REQ-FILE-5: the names of what changed, never the values. */
+function test_definition_changes_name_fields_and_entries(): void {
+  $before = Definition::normalize(definition());
+  same([], Definition::changes($before, $before));
+  $after = Definition::normalize(definition([
+    'repository' => 'busybox:1.36',
+    'configEntries' => [
+      entry('PATH', 'Config', '/config', MOUNTED . '/appdata/a', '', 'rw'),
+      entry('PORT', 'Web', '8080', '18082', '8080', 'tcp'),
+      entry('VARIABLE', 'TZ', 'TZ', 'Etc/UTC', 'Etc/UTC'),
+      entry('VARIABLE', 'Secret', 'SECRET', 'hunter3', '', '', true),
+      entry('DEVICE', 'GPU', '', '/dev/dri'),
+    ],
+  ]));
+  same(['repository', 'port 8080', 'variable SECRET', 'device /dev/dri', 'label com.example.team'], Definition::changes($before, $after));
 }

@@ -11,7 +11,7 @@ final class Flags {
   public const REFUSED = [
     '-v', '--volume', '--mount', '--volumes-from',
     '--privileged', '--cap-add', '--security-opt', '--device', '--cgroup-parent',
-    '--pid', '--ipc', '--uts', '--userns',
+    '--pid', '--uts', '--userns',
     '--net', '--network', '--ip', '--ip6', '--mac-address', '-p', '--publish',
     '-e', '--env', '--env-file', '-l', '--label', '--label-file',
     '--cidfile',
@@ -58,6 +58,12 @@ final class Flags {
     '--workdir' => true,
   ];
 
+  /**
+   * The host IPC namespace: an exception of the policy allows it per container (REQ-POL-11),
+   * so the policy never lists the flag, and no other value is allowed (REQ-VAL-21).
+   */
+  public const IPC = '--ipc';
+
   /** Short spellings, so that `-u 99:100` in an adopted template means `--user`. */
   public const ALIASES = ['-c' => '--cpu-shares', '-h' => '--hostname', '-m' => '--memory', '-t' => '--tty', '-u' => '--user', '-w' => '--workdir'];
 
@@ -76,6 +82,15 @@ final class Flags {
       }
       [$flag, $value] = str_contains($arg, '=') ? explode('=', $arg, 2) : [$arg, null];
       $flag = self::ALIASES[$flag] ?? $flag;
+      if ($flag === self::IPC) {
+        $value ??= $args[++$i] ?? null;
+        if ($value !== 'host') {
+          $errors[] = $value === null ? 'ExtraParams: --ipc needs a value' : "ExtraParams: --ipc takes only the value host, not '$value'";
+          continue;
+        }
+        $flags[] = [$flag, $value];
+        continue;
+      }
       if (in_array($flag, self::REFUSED, true)) {
         $errors[] = "ExtraParams: $flag is never allowed";
         if ($value === null && isset($args[$i + 1]) && !str_starts_with($args[$i + 1], '-')) {

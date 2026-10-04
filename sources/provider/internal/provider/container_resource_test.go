@@ -95,7 +95,7 @@ func changeOutside(t *testing.T, id string) {
 			definition.ConfigEntries[i].Value = "changed-outside"
 		}
 	}
-	operation, err := c.Update(ctx, id, definition)
+	operation, err := c.Update(ctx, id, definition, nil)
 	if err == nil {
 		_, err = c.Wait(ctx, operation, operationTimeout)
 	}
@@ -197,7 +197,9 @@ func TestContainerLifecycle(t *testing.T) {
 	})
 }
 
-func TestRefusalNamesEachCheck(t *testing.T) {
+// REQ-PRV-15 and REQ-PRV-18: the plan already names each failed check, and says where the
+// policy changes.
+func TestPlanNamesEachFailedCheck(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: factories,
 		Steps: []resource.TestStep{{
@@ -209,8 +211,109 @@ resource "tofuman_container" "bad" {
   privileged = true
 }
 `,
-			ExpectError: regexp.MustCompile(`(?s)tofuman refused.*Nothing changed.*privileged needs.*network host needs`),
+			PlanOnly:    true,
+			ExpectError: regexp.MustCompile(`(?s)tofuman would refuse to create tofumantest-prv-bad.*privileged\s+needs.*network\s+host\s+needs.*tofuman\s+tab`),
 		}},
+	})
+}
+
+// REQ-MUT-17 to REQ-MUT-19: a container that dies at its start fails the apply with its log
+// lines; a failed create leaves nothing, and a failed update puts the previous container back.
+func TestStartCheckFailsTheApply(t *testing.T) {
+	config := func(command string) string {
+		return requiredProviders + fmt.Sprintf(`
+resource "tofuman_container" "starter" {
+  name        = "tofumantest-prv-starter"
+  repository  = "busybox:latest"
+  network     = "bridge"
+  autostart   = true
+  start_check = "3s"
+  post_args   = ["sh", "-c", %q]
+}
+`, command)
+	}
+	var id string
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories,
+		Steps: []resource.TestStep{
+			{
+				Config:      config("echo tofumantest-dies; exit 3"),
+				ExpectError: regexp.MustCompile(`(?s)start\s+check.*exit\s+code\s+3.*tofumantest-dies`), // tofu wraps long lines
+			},
+			{
+				PreConfig: func() {
+					if container, err := testClient(t).ContainerNamed(context.Background(), "tofumantest-prv-starter"); err != nil || container != nil {
+						t.Fatalf("a failed create left a managed container behind: %v %v", container, err)
+					}
+				},
+				Config: config("sleep 3600"),
+				Check: resource.TestCheckResourceAttrWith("tofuman_container.starter", "id", func(value string) error {
+					id = value
+					return nil
+				}),
+			},
+			{
+				Config:      config("echo tofumantest-dies-later; exit 4"),
+				ExpectError: regexp.MustCompile(`(?s)start\s+check.*exit\s+code\s+4.*tofumantest-dies-later.*is\s+back`),
+			},
+			{
+				PreConfig: func() {
+					container, err := testClient(t).Container(context.Background(), id)
+					if err != nil || container == nil || !container.Running || container.Definition.PostArgs[2] != "sleep 3600" {
+						t.Fatalf("the previous container is not back and running: %+v %v", container, err)
+					}
+				},
+				Config:   config("sleep 3600"),
+				PlanOnly: true,
+			},
+		},
+	})
+}
+
+// REQ-PRV-20: start_check is not part of the template, so a change of it alone is no mutation.
+func TestStartCheckAloneChangesNothingOnTheServer(t *testing.T) {
+	config := func(startCheck string) string {
+		return requiredProviders + fmt.Sprintf(`
+resource "tofuman_container" "quiet" {
+  name        = "tofumantest-prv-quiet"
+  repository  = "busybox:latest"
+  network     = "bridge"
+  post_args   = ["sleep", "3600"]
+  start_check = %q
+}
+`, startCheck)
+	}
+	var id string
+	var before *string
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories,
+		Steps: []resource.TestStep{
+			{
+				Config: config("10s"),
+				Check: resource.TestCheckResourceAttrWith("tofuman_container.quiet", "id", func(value string) error {
+					id = value
+					container, err := testClient(t).Container(context.Background(), id)
+					if err != nil || container == nil {
+						return fmt.Errorf("reading %s: %v", id, err)
+					}
+					before = container.LastMutationAt
+					return nil
+				}),
+			},
+			{
+				Config: config("45s"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("tofuman_container.quiet", "start_check", "45s"),
+					func(*terraform.State) error {
+						container, err := testClient(t).Container(context.Background(), id)
+						if err != nil || container == nil || before == nil || container.LastMutationAt == nil || *container.LastMutationAt != *before {
+							return fmt.Errorf("a change of start_check alone reached the server: %+v %v", container, err)
+						}
+						return nil
+					},
+				),
+			},
+		},
 	})
 }
 

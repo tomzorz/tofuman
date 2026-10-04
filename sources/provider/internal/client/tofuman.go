@@ -6,6 +6,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 // ConfigEntry is TofumanConfigEntry and TofumanConfigEntryInput of spec section 15.
@@ -110,14 +112,53 @@ func (c *Client) ContainerNamed(ctx context.Context, name string) (*Container, e
 	return data.Tofuman.Container, err
 }
 
-// Create starts an operation that creates a managed container.
-func (c *Client) Create(ctx context.Context, definition Definition) (*Operation, error) {
-	return c.mutate(ctx, "createContainer", `$definition: TofumanDefinitionInput!`, `definition: $definition`, map[string]any{"definition": definition})
+// Check is TofumanCheck: the failed checks of a mutation that did not happen.
+type Check struct {
+	FailedChecks []string `json:"failedChecks"`
+	PolicyGaps   int      `json:"policyGaps"`
+}
+
+// Check asks the API module which checks a mutation would fail, without the mutation
+// (REQ-PRV-15): a definition alone checks a create, an ID and a definition check an update, and
+// an ID alone checks a delete.
+func (c *Client) Check(ctx context.Context, id *string, definition *Definition) (*Check, error) {
+	var data struct {
+		Tofuman struct {
+			Check *Check `json:"check"`
+		} `json:"tofuman"`
+	}
+	err := c.do(ctx, `query($id: ID, $definition: TofumanDefinitionInput) { tofuman { check(id: $id, definition: $definition) { failedChecks policyGaps } } }`,
+		map[string]any{"id": id, "definition": definition}, &data)
+	if err != nil {
+		return nil, err
+	}
+	if data.Tofuman.Check == nil {
+		return nil, fmt.Errorf("the check answered without a result")
+	}
+	return data.Tofuman.Check, nil
+}
+
+// Create starts an operation that creates a managed container. A nil startCheckSeconds leaves
+// the start check at the server's default (REQ-PRV-19).
+func (c *Client) Create(ctx context.Context, definition Definition, startCheckSeconds *int) (*Operation, error) {
+	parameters, arguments, variables := withStartCheck(`$definition: TofumanDefinitionInput!`, `definition: $definition`, map[string]any{"definition": definition}, startCheckSeconds)
+	return c.mutate(ctx, "createContainer", parameters, arguments, variables)
 }
 
 // Update starts an operation that recreates the managed container id from definition.
-func (c *Client) Update(ctx context.Context, id string, definition Definition) (*Operation, error) {
-	return c.mutate(ctx, "updateContainer", `$id: ID!, $definition: TofumanDefinitionInput!`, `id: $id, definition: $definition`, map[string]any{"id": id, "definition": definition})
+func (c *Client) Update(ctx context.Context, id string, definition Definition, startCheckSeconds *int) (*Operation, error) {
+	parameters, arguments, variables := withStartCheck(`$id: ID!, $definition: TofumanDefinitionInput!`, `id: $id, definition: $definition`, map[string]any{"id": id, "definition": definition}, startCheckSeconds)
+	return c.mutate(ctx, "updateContainer", parameters, arguments, variables)
+}
+
+// withStartCheck names the start check only when it differs from the default, so that a plugin
+// from before the start check still takes the mutation.
+func withStartCheck(parameters, arguments string, variables map[string]any, seconds *int) (string, string, map[string]any) {
+	if seconds == nil {
+		return parameters, arguments, variables
+	}
+	variables["startCheckSeconds"] = *seconds
+	return parameters + `, $startCheckSeconds: Int!`, arguments + `, startCheckSeconds: $startCheckSeconds`, variables
 }
 
 // Delete starts an operation that removes the managed container id and its template.
@@ -162,6 +203,11 @@ func (c *Client) Wait(ctx context.Context, operation *Operation, timeout time.Du
 	deadline := time.Now().Add(timeout)
 	interval := 250 * time.Millisecond
 	for {
+		step := ""
+		if operation.Step != nil {
+			step = *operation.Step
+		}
+		tflog.Debug(ctx, "tofuman operation", map[string]any{"operation": operation.ID, "state": operation.State, "step": step}) // REQ-PRV-17
 		switch operation.State {
 		case StateSucceeded:
 			return operation, nil

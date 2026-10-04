@@ -135,9 +135,14 @@ final class Validator {
     }
     foreach ($d['configEntries'] as $i => $entry) {
       foreach ($entry as $key => $value) {
-        if ($back['configEntries'][$i][$key] !== $value) {
-          $errors[] = "config entry {$entry['target']}: $key does not survive DockerMan's own round trip: " . json_encode($value, JSON_UNESCAPED_SLASHES) . ' comes back as ' . json_encode($back['configEntries'][$i][$key], JSON_UNESCAPED_SLASHES);
+        if ($back['configEntries'][$i][$key] === $value) {
+          continue;
         }
+        $error = "config entry {$entry['target']}: $key does not survive DockerMan's own round trip";
+        if (!($entry['mask'] && $key === 'value')) { // a masked value stays out of the error, the audit log, and the diagnostics file
+          $error .= ': ' . json_encode($value, JSON_UNESCAPED_SLASHES) . ' comes back as ' . json_encode($back['configEntries'][$i][$key], JSON_UNESCAPED_SLASHES);
+        }
+        $errors[] = $error;
       }
     }
     return $errors;

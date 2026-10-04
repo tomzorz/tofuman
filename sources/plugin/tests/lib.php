@@ -51,12 +51,35 @@ function fixture(string $name): string {
   return __DIR__ . "/fixtures/$name";
 }
 
+/**
+ * A fresh place for the plugin's files. The notify script is a recorder (fixtures/notify.php)
+ * that writes each notification it gets to notifications.log in that place.
+ */
 function make_env(?string $testedBuildsFile = null): Env {
   global $dockerManPaths, $docroot;
   $dir = sys_get_temp_dir() . '/tofumantest-' . bin2hex(random_bytes(4));
   mkdir("$dir/data", 0755, true);
+  mkdir("$dir/run", 0755, true);
+  putenv("TOFUMAN_NOTIFY_LOG=$dir/notifications.log");
   return new Env("$dir/data", "$dir/lock", $dockerManPaths['autostart-file'], $docroot, $testedBuildsFile ?? dirname(__DIR__) . '/shim/tested-builds.json',
-    "$dir/tofuman-api.json", dirname(__DIR__) . '/api/package.json');
+    "$dir/tofuman-api.json", dirname(__DIR__) . '/api/package.json', "$dir/run", fixture('notify.php'), "$dir/graphql-api.log", "$dir/unraid-version");
+}
+
+/** The environment of a shim that runs in its own process against the place of make_env(). */
+function shim_environment(Env $env): array {
+  return getenv() + [
+    'TOFUMAN_DATA_DIR' => $env->dataDir,
+    'TOFUMAN_LOCK' => $env->lockFile,
+    'TOFUMAN_RUN_DIR' => $env->runDir,
+    'TOFUMAN_NOTIFY' => $env->notifyScript,
+    'TOFUMAN_API_LOG' => $env->apiLogFile,
+  ];
+}
+
+/** @return list<list<string>> the arguments of each notification that the recorder got */
+function notifications(Env $env): array {
+  $log = dirname($env->dataDir) . '/notifications.log';
+  return is_file($log) ? array_map(fn(string $line) => json_decode($line, true), file($log, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES)) : [];
 }
 
 function network_name(): string {

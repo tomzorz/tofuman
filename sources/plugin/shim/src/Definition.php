@@ -180,6 +180,39 @@ final class Definition {
     return Json::hash($d);
   }
 
+  /**
+   * REQ-FILE-4 and REQ-FILE-5: the names of the fields and the config entries that differ, never
+   * their values. A config entry goes by its type and its target, a device by its path.
+   *
+   * @return list<string>
+   */
+  public static function changes(array $before, array $after): array {
+    $names = [];
+    foreach ($after as $key => $value) {
+      if ($key !== 'configEntries' && ($before[$key] ?? null) !== $value) {
+        $names[] = $key;
+      }
+    }
+    $keyed = function (array $entries): array {
+      $byKey = [];
+      foreach ($entries as $e) {
+        $byKey[strtolower($e['type']) . ' ' . ($e['type'] === 'DEVICE' ? $e['value'] : $e['target'])][] = $e;
+      }
+      return $byKey;
+    };
+    $old = $keyed($before['configEntries'] ?? []);
+    $new = $keyed($after['configEntries']);
+    foreach ($new as $key => $entries) {
+      if (($old[$key] ?? null) !== $entries) {
+        $names[] = $key;
+      }
+    }
+    foreach (array_keys(array_diff_key($old, $new)) as $key) {
+      $names[] = $key;
+    }
+    return $names;
+  }
+
   /** REQ-DEF-10: type order path, port, variable, label, device; the order within each type stays. */
   private static function sortEntries(array $entries): array {
     $rank = array_flip(array_keys(self::TYPES));

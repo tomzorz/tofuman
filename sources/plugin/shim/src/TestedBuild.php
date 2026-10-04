@@ -48,9 +48,17 @@ final class TestedBuild {
 
   /** REQ-UPG-3. */
   public static function refuseIfUntested(Env $env): void {
+    $mismatches = self::mismatches($env);
+    if ($mismatches) {
+      throw new Refusal($mismatches);
+    }
+  }
+
+  /** @return list<string> why the webgui files match no tested build, each file named; empty when they match one */
+  public static function mismatches(Env $env): array {
     $current = self::current($env->docroot);
     if (self::match($current, $env->testedBuildsFile) !== null) {
-      return;
+      return [];
     }
     $builds = self::builds($env->testedBuildsFile);
     $errors = [];
@@ -59,7 +67,7 @@ final class TestedBuild {
         $errors[] = "the webgui file $path matches no tested build of this plugin release";
       }
     }
-    throw new Refusal($errors ?: ['the webgui files match no tested build of this plugin release as a set']);
+    return $errors ?: ['the webgui files match no tested build of this plugin release as a set'];
   }
 
   private static function builds(string $testedBuildsFile): array {

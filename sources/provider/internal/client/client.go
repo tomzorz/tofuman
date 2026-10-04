@@ -15,8 +15,11 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
+
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 // Config says how to reach the API module.
@@ -27,14 +30,20 @@ type Config struct {
 	// CACertificate is PEM text, trusted next to the system roots.
 	CACertificate string
 	Insecure      bool
+	// Version is the version of the provider, which each request names (REQ-PRV-14).
+	Version string
 }
 
 // Client sends the queries and mutations of the API module.
 type Client struct {
-	url    string
-	apiKey string
-	http   *http.Client
+	url     string
+	apiKey  string
+	version string
+	http    *http.Client
 }
+
+// ProviderHeader carries the version of the provider to the audit log (REQ-PRV-14).
+const ProviderHeader = "x-tofuman-provider"
 
 const (
 	// requestTimeout covers one request. nginx on the server ends a request after 60 seconds
@@ -59,9 +68,10 @@ func New(config Config) (*Client, error) {
 		return nil, err
 	}
 	return &Client{
-		url:    strings.TrimSuffix(endpoint.String(), "/") + "/graphql",
-		apiKey: config.APIKey,
-		http:   &http.Client{Transport: transport, Timeout: requestTimeout},
+		url:     strings.TrimSuffix(endpoint.String(), "/") + "/graphql",
+		apiKey:  config.APIKey,
+		version: config.Version,
+		http:    &http.Client{Transport: transport, Timeout: requestTimeout},
 	}, nil
 }
 
@@ -97,6 +107,8 @@ type Error struct {
 	Code string
 	// Checks names each failed check of a refusal (REQ-MUT-3).
 	Checks []string
+	// PolicyGaps counts the checks that a change of the policy would pass (REQ-PRV-18).
+	PolicyGaps int
 }
 
 func (e *Error) Error() string {
@@ -116,13 +128,34 @@ type graphQLError struct {
 	Extensions struct {
 		Code          string          `json:"code"`
 		Errors        []string        `json:"errors"`
+		PolicyGaps    int             `json:"policyGaps"`
 		OriginalError json.RawMessage `json:"originalError"`
 	} `json:"extensions"`
 }
 
-// do sends one request. It never puts the API key or the variables, which can hold the values
-// of secrets, into an error (REQ-PRV-11).
+// fieldName picks the field of the tofuman namespace that a request asks for, such as
+// createContainer or operation, for the log.
+var fieldName = regexp.MustCompile(`tofuman\s*\{\s*(\w+)`)
+
+// do sends one request, and logs it at the level DEBUG with its duration (REQ-PRV-17). It never
+// puts the API key or the variables, which can hold the values of secrets, into an error or a
+// log line (REQ-PRV-11).
 func (c *Client) do(ctx context.Context, query string, variables map[string]any, data any) error {
+	field := "request"
+	if match := fieldName.FindStringSubmatch(query); match != nil {
+		field = match[1]
+	}
+	started := time.Now()
+	err := c.send(ctx, query, variables, data)
+	fields := map[string]any{"field": field, "ms": time.Since(started).Milliseconds()}
+	if err != nil {
+		fields["error"] = err.Error()
+	}
+	tflog.Debug(ctx, "tofuman request", fields)
+	return err
+}
+
+func (c *Client) send(ctx context.Context, query string, variables map[string]any, data any) error {
 	body, err := json.Marshal(map[string]any{"query": query, "variables": variables})
 	if err != nil {
 		return err
@@ -133,6 +166,9 @@ func (c *Client) do(ctx context.Context, query string, variables map[string]any,
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("x-api-key", c.apiKey)
+	if c.version != "" {
+		request.Header.Set(ProviderHeader, c.version)
+	}
 	response, err := c.http.Do(request)
 	if err != nil {
 		return fmt.Errorf("POST %s: %w", c.url, err)
@@ -163,7 +199,7 @@ func (c *Client) do(ctx context.Context, query string, variables map[string]any,
 
 func errorFrom(errs []graphQLError) *Error {
 	first := errs[0]
-	result := &Error{Message: first.Message, Code: first.Extensions.Code, Checks: first.Extensions.Errors}
+	result := &Error{Message: first.Message, Code: first.Extensions.Code, Checks: first.Extensions.Errors, PolicyGaps: first.Extensions.PolicyGaps}
 	if details := originalDetails(first.Extensions.OriginalError, first.Message); len(details) > 0 && len(result.Checks) == 0 {
 		result.Message += ": " + strings.Join(details, "; ")
 	}

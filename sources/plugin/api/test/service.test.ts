@@ -5,7 +5,7 @@
 
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, test } from 'node:test';
@@ -13,11 +13,11 @@ import { beforeEach, test } from 'node:test';
 import { GraphQLError } from 'graphql';
 
 import { DEFAULT_SHIM, TofumanService } from '../src/service.js';
-import { type ConfigEntry, type Definition, TofumanConfigType, TofumanOperationState } from '../src/shapes.js';
+import { type ConfigEntry, type Definition, isRecord, TofumanConfigType, TofumanOperationState } from '../src/shapes.js';
 import type { Caller } from '../src/shim.js';
 
-const KEY: Caller = { id: '11111111-1111-4111-8111-111111111111', name: 'tests', admin: false };
-const STRANGER: Caller = { id: '22222222-2222-4222-8222-222222222222', name: 'stranger', admin: false };
+const KEY: Caller = { id: '11111111-1111-4111-8111-111111111111', name: 'tests', admin: false, providerVersion: null };
+const STRANGER: Caller = { id: '22222222-2222-4222-8222-222222222222', name: 'stranger', admin: false, providerVersion: null };
 const NETWORK = process.env['TOFUMAN_TEST_NETWORK'] ?? 'bridge';
 
 function service(): TofumanService {
@@ -72,6 +72,9 @@ beforeEach(() => {
   const data = mkdtempSync(join(tmpdir(), 'tofumantest-api-'));
   process.env['TOFUMAN_DATA_DIR'] = data;
   process.env['TOFUMAN_LOCK'] = join(data, 'lock');
+  process.env['TOFUMAN_RUN_DIR'] = data;
+  process.env['TOFUMAN_NOTIFY'] = '/usr/local/emhttp/plugins/tofuman/tests/fixtures/notify.php';
+  process.env['TOFUMAN_NOTIFY_LOG'] = join(data, 'notifications.log');
   writeFileSync(join(data, 'policy.json'), JSON.stringify({
     version: 1,
     keyAllowlist: [KEY.id],
@@ -84,7 +87,7 @@ beforeEach(() => {
 
 test('a mutation queues an operation, and the operation creates the container', async () => {
   const tofuman = service();
-  const queued = await tofuman.create(definition(), KEY);
+  const queued = await tofuman.create(definition(), 10, KEY);
   assert.equal(queued.state, TofumanOperationState.QUEUED);
   await tofuman.idle();
   const done = await tofuman.operation(queued.id, KEY);
@@ -98,11 +101,11 @@ test('a mutation queues an operation, and the operation creates the container', 
 
 test('update and delete run as operations too', async () => {
   const tofuman = service();
-  await tofuman.create(definition(), KEY);
+  await tofuman.create(definition(), 10, KEY);
   await tofuman.idle();
   const created = await tofuman.get(null, 'tofumantest-api', KEY);
   assert.ok(created !== null);
-  const updating = await tofuman.update(created.id, definition({ extraParams: ['--hostname', 'beta'] }), KEY);
+  const updating = await tofuman.update(created.id, definition({ extraParams: ['--hostname', 'beta'] }), 10, KEY);
   await tofuman.idle();
   assert.deepEqual((await tofuman.operation(updating.id, KEY)).container?.definition.extraParams, ['--hostname', 'beta']);
   const deleting = await tofuman.delete(created.id, KEY);
@@ -115,7 +118,7 @@ test('update and delete run as operations too', async () => {
 
 test('a refusal comes back from the mutation itself and names each failed check', async () => {
   const tofuman = service();
-  await assert.rejects(tofuman.create(definition({ privileged: true, network: 'host' }), KEY), (error: unknown) => {
+  await assert.rejects(tofuman.create(definition({ privileged: true, network: 'host' }), 10, KEY), (error: unknown) => {
     refusalWith('privileged needs')(error);
     assert.ok(error instanceof GraphQLError);
     const errors = error.extensions['errors'];
@@ -126,7 +129,7 @@ test('a refusal comes back from the mutation itself and names each failed check'
 
 test('a failed operation reports its step', async () => {
   const tofuman = service();
-  const queued = await tofuman.create(definition({ extraParams: ['--runtime', 'tofumantest-no-such-runtime'] }), KEY);
+  const queued = await tofuman.create(definition({ extraParams: ['--runtime', 'tofumantest-no-such-runtime'] }), 10, KEY);
   await tofuman.idle();
   const failed = await tofuman.operation(queued.id, KEY);
   assert.equal(failed.state, TofumanOperationState.FAILED);
@@ -136,12 +139,52 @@ test('a failed operation reports its step', async () => {
 
 test('the key allowlist guards reads and operations as well', async () => {
   const tofuman = service();
-  const queued = await tofuman.create(definition(), KEY);
+  const queued = await tofuman.create(definition(), 10, KEY);
   await tofuman.idle();
   await assert.rejects(tofuman.list(STRANGER), refusalWith('not on the key allowlist'));
   await assert.rejects(tofuman.operation(queued.id, STRANGER), refusalWith('not on the key allowlist'));
-  await assert.rejects(tofuman.create(definition({ name: 'tofumantest-api2' }), STRANGER), refusalWith('not on the key allowlist'));
+  await assert.rejects(tofuman.create(definition({ name: 'tofumantest-api2' }), 10, STRANGER), refusalWith('not on the key allowlist'));
   assert.equal((await tofuman.list({ ...STRANGER, admin: true })).length, 1, 'an administrator was refused');
+});
+
+test('the query check answers with the failed checks and counts the policy gaps (REQ-MUT-25)', async () => {
+  const tofuman = service();
+  assert.deepEqual(await tofuman.check(null, definition(), KEY), { failedChecks: [], policyGaps: 0 });
+  const refused = await tofuman.check(null, definition({ privileged: true, extraParams: ['--cap-add', 'NET_ADMIN'] }), KEY);
+  assert.equal(refused.policyGaps, 1, JSON.stringify(refused));
+  assert.ok(refused.failedChecks.some((check) => check.includes('--cap-add is never allowed')), JSON.stringify(refused));
+  await assert.rejects(tofuman.check(null, definition(), STRANGER), refusalWith('not on the key allowlist'));
+  assert.ok(!existsSync(join(process.env['TOFUMAN_DATA_DIR'] ?? '', 'audit.jsonl')), 'the query check wrote to the audit log');
+});
+
+test('a refusal counts its policy gaps (REQ-PRV-18)', async () => {
+  await assert.rejects(service().create(definition({ network: 'host' }), 10, KEY), (error: unknown) => {
+    assert.ok(error instanceof GraphQLError && error.extensions['policyGaps'] === 1, `no count of the policy gaps: ${JSON.stringify(error)}`);
+    return true;
+  });
+});
+
+test('a start check outside 0 to 600 seconds is refused and audited (REQ-MUT-16)', async () => {
+  const tofuman = service();
+  await assert.rejects(tofuman.create(definition(), 601, KEY), refusalWith('startCheckSeconds must be a whole number from 0 to 600'));
+  await assert.rejects(tofuman.create(definition(), 1.5, KEY), refusalWith('startCheckSeconds'));
+  const audit = readFileSync(join(process.env['TOFUMAN_DATA_DIR'] ?? '', 'audit.jsonl'), 'utf8').trim().split('\n');
+  assert.equal(audit.length, 2);
+  assert.ok(audit.every((line) => line.includes('"result":"refused"')));
+});
+
+test('the operation of a mutation is the line in the operation log (REQ-MUT-20)', async () => {
+  const tofuman = service();
+  const queued = await tofuman.create(definition(), 10, { ...KEY, providerVersion: '0.2.0' });
+  await tofuman.idle();
+  const lines = readFileSync(join(process.env['TOFUMAN_DATA_DIR'] ?? '', 'operations.jsonl'), 'utf8').trim().split('\n').map((line): unknown => JSON.parse(line));
+  assert.equal(lines.length, 1);
+  const line = lines[0];
+  assert.ok(isRecord(line), 'the line is not an object');
+  assert.equal(line['id'], queued.id);
+  assert.equal(line['providerVersion'], '0.2.0');
+  assert.equal(line['result'], 'succeeded');
+  assert.match(String(line['queuedAt']), /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
 });
 
 test('an unknown operation is an error that names it', async () => {

@@ -3,7 +3,7 @@
 // The GraphQL types of spec section 15, code first, because unraid-api builds its schema from
 // the decorated classes of every module it loads. test/schema.test.ts holds these to the spec.
 
-import { Field, ID, InputType, ObjectType, registerEnumType } from '@nestjs/graphql';
+import { Field, ID, InputType, Int, ObjectType, registerEnumType } from '@nestjs/graphql';
 
 import { TofumanConfigType, TofumanOperationState } from './shapes.js';
 
@@ -110,6 +110,12 @@ export class TofumanOperation {
   @Field(() => String, { nullable: true, description: 'The step of section 9 that runs or that failed.' }) step!: string | null;
   @Field(() => String, { nullable: true }) error!: string | null;
   @Field(() => TofumanContainer, { nullable: true, description: 'Set after a successful create or update.' }) container!: TofumanContainer | null;
+}
+
+@ObjectType()
+export class TofumanCheck {
+  @Field(() => [String], { description: 'Each failed check. An empty list means that the API module would accept the mutation.' }) failedChecks!: string[];
+  @Field(() => Int, { description: 'How many of the failed checks are policy gaps.' }) policyGaps!: number;
 }
 
 /** The namespace of the queries. Its fields come from TofumanQueryResolver. */

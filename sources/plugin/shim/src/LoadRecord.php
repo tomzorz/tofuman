@@ -13,8 +13,7 @@ namespace Tofuman;
 final class LoadRecord {
   /** @return array{state: string, version: ?string, expected: ?string, loadedAt: ?string} state: loaded, stale, gone, or missing */
   public static function status(Env $env): array {
-    $manifest = is_file($env->apiManifestFile) ? json_decode((string)file_get_contents($env->apiManifestFile), true) : null;
-    $expected = is_array($manifest) && is_string($manifest['version'] ?? null) ? $manifest['version'] : null;
+    $expected = $env->pluginVersion();
     $record = is_file($env->loadRecordFile) ? json_decode((string)file_get_contents($env->loadRecordFile), true) : null;
     if (!is_array($record)) {
       return ['state' => 'missing', 'version' => null, 'expected' => $expected, 'loadedAt' => null];

@@ -70,7 +70,9 @@ final class Policy {
       }
     }
     foreach ($p['extraParamFlags'] as $flag) {
-      if (!array_key_exists($flag, Flags::KNOWN)) {
+      if ($flag === Flags::IPC) {
+        $errors[] = "extraParamFlags: --ipc belongs in exceptions, as \"ipcHost\": true for each container that needs it"; // REQ-POL-11
+      } elseif (!array_key_exists($flag, Flags::KNOWN)) {
         $errors[] = "extraParamFlags: tofuman does not know the flag '$flag'"; // REQ-VAL-8
       }
     }
@@ -80,11 +82,11 @@ final class Policy {
       return $errors;
     }
     foreach ($exceptions as $name => $exception) {
-      if (!is_array($exception) || array_diff(array_keys($exception), ['privileged', 'hostNetwork', 'devices'])) {
-        $errors[] = "exceptions.$name may hold only privileged, hostNetwork, and devices";
+      if (!is_array($exception) || array_diff(array_keys($exception), ['privileged', 'hostNetwork', 'ipcHost', 'devices'])) {
+        $errors[] = "exceptions.$name may hold only privileged, hostNetwork, ipcHost, and devices";
         continue;
       }
-      foreach (['privileged', 'hostNetwork'] as $key) {
+      foreach (['privileged', 'hostNetwork', 'ipcHost'] as $key) {
         if (isset($exception[$key]) && !is_bool($exception[$key])) {
           $errors[] = "exceptions.$name.$key must be a boolean";
         }
@@ -102,41 +104,91 @@ final class Policy {
     return ($caller['admin'] ?? false) === true || in_array($caller['id'] ?? '', $this->p['keyAllowlist'], true);
   }
 
-  /** REQ-POL-2 to REQ-POL-7, and REQ-VAL-6 for the ExtraParams flags. */
+  /** REQ-POL-2 to REQ-POL-7 and REQ-POL-11, and REQ-VAL-6, REQ-VAL-7, and REQ-VAL-21 for the ExtraParams flags. */
   public function check(array $d): array {
-    $errors = [];
-    $exception = $this->p['exceptions'][$d['name']] ?? [];
-    $roots = array_map(fn(string $root) => Mounts::resolve($root), $this->p['bindRoots']);
+    try {
+      Flags::parse($d['extraParams']);
+      $errors = [];
+    } catch (Refusal $refusal) {
+      $errors = $refusal->errors; // flags that no policy can allow; gaps() leaves them out
+    }
+    return [...$errors, ...array_column($this->gaps($d), 'text')];
+  }
+
+  /**
+   * The policy gaps of a definition: what a person could add to the policy so that it passes.
+   * The tab offers each one (REQ-TAB-26 to REQ-TAB-29), and a refusal counts them (REQ-PRV-18).
+   *
+   * @return list<array{kind: string, value: string, container: string, text: string}> kind: bindRoot, network, flag, privileged, hostNetwork, ipcHost, or device
+   */
+  public function gaps(array $d): array {
+    $name = $d['name'];
+    $exception = $this->p['exceptions'][$name] ?? [];
+    $gap = fn(string $kind, string $value, string $text) => ['kind' => $kind, 'value' => $value, 'container' => $name, 'text' => $text];
+    $gaps = [];
     foreach ($d['configEntries'] as $e) {
       if ($e['type'] === 'PATH') {
-        $resolved = rtrim(Mounts::resolve($e['value']), '/') . '/';
-        $inside = array_filter($roots, fn(string $root) => str_starts_with($resolved, rtrim($root, '/') . '/'));
-        if (!$inside) {
-          $errors[] = "path {$e['value']} is outside every directory in the policy's bindRoots";
+        if (!$this->insideBindRoots($e['value'])) {
+          $gaps[] = $gap('bindRoot', self::proposedRoot($e['value']), "path {$e['value']} is outside every directory in the policy's bindRoots") + ['path' => $e['value']];
         }
       } elseif ($e['type'] === 'DEVICE' && !in_array($e['value'], $exception['devices'] ?? [], true)) {
-        $errors[] = "device {$e['value']} needs an entry in the policy's exceptions.{$d['name']}.devices";
+        $gaps[] = $gap('device', $e['value'], "device {$e['value']} needs an entry in the policy's exceptions.$name.devices");
       }
     }
     if ($d['privileged'] && ($exception['privileged'] ?? false) !== true) {
-      $errors[] = "privileged needs \"privileged\": true in the policy's exceptions.{$d['name']}";
+      $gaps[] = $gap('privileged', 'true', "privileged needs \"privileged\": true in the policy's exceptions.$name");
     }
     if ($d['network'] === 'host') {
       if (($exception['hostNetwork'] ?? false) !== true) {
-        $errors[] = "network host needs \"hostNetwork\": true in the policy's exceptions.{$d['name']}";
+        $gaps[] = $gap('hostNetwork', 'true', "network host needs \"hostNetwork\": true in the policy's exceptions.$name");
       }
     } elseif (!in_array($d['network'], $this->p['networks'], true)) {
-      $errors[] = "network {$d['network']} is not in the policy's networks";
+      $gaps[] = $gap('network', $d['network'], "network {$d['network']} is not in the policy's networks");
     }
     try {
-      foreach (Flags::parse($d['extraParams']) as [$flag]) {
-        if (!in_array($flag, $this->p['extraParamFlags'], true)) {
-          $errors[] = "ExtraParams: the policy's extraParamFlags does not list $flag";
-        }
-      }
-    } catch (Refusal $refusal) {
-      array_push($errors, ...$refusal->errors);
+      $flags = Flags::parse($d['extraParams']);
+    } catch (Refusal) {
+      $flags = []; // check() names what no policy can allow, and the gaps of the other flags wait for that fix
     }
-    return $errors;
+    foreach ($flags as [$flag]) {
+      if ($flag === Flags::IPC) {
+        if (($exception['ipcHost'] ?? false) !== true) {
+          $gaps[] = $gap('ipcHost', 'true', "--ipc host needs \"ipcHost\": true in the policy's exceptions.$name");
+        }
+      } elseif (!in_array($flag, $this->p['extraParamFlags'], true)) {
+        $gaps[] = $gap('flag', $flag, "ExtraParams: the policy's extraParamFlags does not list $flag");
+      }
+    }
+    return $gaps;
+  }
+
+  /** Whether the policy, as it stands now, has what a gap asked for: a gap remembered from a refusal may be closed since. */
+  public function covers(array $gap): bool {
+    $exception = $this->p['exceptions'][$gap['container'] ?? ''] ?? [];
+    return match ($gap['kind'] ?? '') {
+      'bindRoot' => $this->insideBindRoots((string)($gap['path'] ?? $gap['value'])),
+      'network' => in_array($gap['value'], $this->p['networks'], true),
+      'flag' => in_array($gap['value'], $this->p['extraParamFlags'], true),
+      'device' => in_array($gap['value'], $exception['devices'] ?? [], true),
+      'privileged', 'hostNetwork', 'ipcHost' => ($exception[$gap['kind']] ?? false) === true,
+      default => false,
+    };
+  }
+
+  /** REQ-POL-2 and REQ-POL-3: inside a bind root once both sides are resolved. */
+  private function insideBindRoots(string $path): bool {
+    $resolved = rtrim(Mounts::resolve($path), '/') . '/';
+    foreach ($this->p['bindRoots'] as $root) {
+      if (str_starts_with($resolved, rtrim(Mounts::resolve($root), '/') . '/')) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** REQ-TAB-29: the directory that the first three segments of the host path name. */
+  public static function proposedRoot(string $hostPath): string {
+    $segments = array_values(array_filter(explode('/', $hostPath), fn(string $segment) => $segment !== ''));
+    return '/' . implode('/', array_slice($segments, 0, 3)) . '/';
   }
 }

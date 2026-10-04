@@ -7,6 +7,9 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+
 	"github.com/tomzorz/tofuman/sources/provider/internal/client"
 )
 
@@ -38,12 +41,15 @@ func TestModelRoundTrip(t *testing.T) {
 			},
 		},
 	}
-	model, diags := modelFrom(context.Background(), container)
+	model, diags := modelFrom(context.Background(), container, types.StringValue("30s"))
 	if diags.HasError() {
 		t.Fatalf("modelFrom: %v", diags)
 	}
 	if model.ID.ValueString() != container.ID {
 		t.Errorf("the ID became %s", model.ID)
+	}
+	if model.StartCheck.ValueString() != "30s" {
+		t.Errorf("start_check became %s, not the 30s of the configuration", model.StartCheck)
 	}
 	definition, diags := model.definition(context.Background())
 	if diags.HasError() {
@@ -57,9 +63,12 @@ func TestModelRoundTrip(t *testing.T) {
 // An absent list comes back as an empty list, never as null: the schema declares every list
 // non-null.
 func TestEmptyListsStayLists(t *testing.T) {
-	model, diags := modelFrom(context.Background(), &client.Container{ID: "x", Definition: client.Definition{Name: "empty"}})
+	model, diags := modelFrom(context.Background(), &client.Container{ID: "x", Definition: client.Definition{Name: "empty"}}, types.StringNull())
 	if diags.HasError() {
 		t.Fatal(diags)
+	}
+	if model.StartCheck.ValueString() != defaultStartCheck {
+		t.Errorf("after an import, start_check is %s, not the default", model.StartCheck)
 	}
 	definition, diags := model.definition(context.Background())
 	if diags.HasError() {
@@ -68,4 +77,32 @@ func TestEmptyListsStayLists(t *testing.T) {
 	if definition.IPAddresses == nil || definition.ExtraParams == nil || definition.PostArgs == nil || definition.ConfigEntries == nil {
 		t.Errorf("a nil list would fail the request: %+v", definition)
 	}
+}
+
+// The default start check goes unnamed, so a plugin from before the start check still takes
+// the mutation; any other length goes as whole seconds (REQ-PRV-19).
+func TestStartCheckArgument(t *testing.T) {
+	for value, want := range map[string]*int{"10s": nil, "0s": pointer(0), "2m": pointer(120), "45s": pointer(45)} {
+		got := startCheckArgument(types.StringValue(value))
+		if (got == nil) != (want == nil) || (got != nil && *got != *want) {
+			t.Errorf("start_check %s became %v", value, got)
+		}
+	}
+	if startCheckArgument(types.StringNull()) != nil {
+		t.Error("an unset start_check was named")
+	}
+}
+
+func TestStartCheckValidator(t *testing.T) {
+	for value, valid := range map[string]bool{"0s": true, "10s": true, "10m": true, "1m30s": true, "601s": false, "-1s": false, "1.5s": false, "ten": false} {
+		var resp validator.StringResponse
+		startCheck{}.ValidateString(context.Background(), validator.StringRequest{ConfigValue: types.StringValue(value)}, &resp)
+		if resp.Diagnostics.HasError() == valid {
+			t.Errorf("start_check %q: valid is %v, the validator said %v", value, valid, resp.Diagnostics)
+		}
+	}
+}
+
+func pointer(value int) *int {
+	return &value
 }

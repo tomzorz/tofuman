@@ -8,12 +8,8 @@ declare(strict_types=1);
 use Tofuman\Env;
 
 function tab_request(Env $env, string $method, array $params): array {
-  $environment = getenv() + [
-    'TOFUMAN_DATA_DIR' => $env->dataDir,
-    'TOFUMAN_LOCK' => $env->lockFile,
-  ];
   $request = json_encode(['method' => $method, 'params' => $params], JSON_THROW_ON_ERROR);
-  $process = proc_open(['php', fixture('tab-request.php'), $request], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, null, $environment);
+  $process = proc_open(['php', fixture('tab-request.php'), $request], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, null, shim_environment($env));
   $stdout = (string)stream_get_contents($pipes[1]);
   $stderr = (string)stream_get_contents($pipes[2]);
   proc_close($process);

@@ -12,6 +12,8 @@ export interface Caller {
   id: string;
   name: string;
   admin: boolean;
+  /** REQ-PRV-14: the header x-tofuman-provider, for the audit log. */
+  providerVersion: string | null;
 }
 
 /** A refusal (a check failed, nothing changed) or a failure at a step of an operation. */
@@ -20,6 +22,8 @@ export class ShimError extends Error {
     readonly refused: boolean,
     readonly step: string | null,
     readonly errors: string[],
+    /** REQ-PRV-18: how many of the errors of a refusal are policy gaps. */
+    readonly policyGaps = 0,
   ) {
     super(errors.join('; '));
   }
@@ -63,5 +67,11 @@ export async function runShim(shimPath: string, action: string, args: Record<str
   }
   const errors = response['errors'];
   const step = response['step'];
-  throw new ShimError(response['refused'] === true, typeof step === 'string' ? step : null, isStringList(errors) ? errors : [`${action} failed without an error text`]);
+  const policyGaps = response['policyGaps'];
+  throw new ShimError(
+    response['refused'] === true,
+    typeof step === 'string' ? step : null,
+    isStringList(errors) ? errors : [`${action} failed without an error text`],
+    typeof policyGaps === 'number' ? policyGaps : 0,
+  );
 }
