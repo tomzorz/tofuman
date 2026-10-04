@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-# A plugin release from a plugin-YYYY.MM.DD tag (REQ-PKG-16, REQ-PKG-19, REQ-PKG-20). The tagged
-# commit carries tofuman.plg with the version and the hash that ci/package.sh --plg wrote; this
-# workflow builds the package again and publishes it only if the hash matches.
+# A candidate release of the plugin from a plugin-YYYY.MM.DD tag (REQ-PKG-16, REQ-PKG-19,
+# REQ-PKG-23, REQ-PKG-24): the package, built reproducibly, and a .plg file with the version of
+# the tag and the hash of that package, as a GitHub pre-release. The .plg file on main moves to
+# that version only when a person promotes the candidate (promote-plugin.yml).
 name: release-plugin
 
 on:
@@ -19,16 +20,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Build the package and check it against tofuman.plg
+      - name: Build the package and the .plg file of the candidate
         run: |
           version=${GITHUB_REF_NAME#plugin-}
           plg=sources/plugin/tofuman.plg
-          [ "$(sed -n 's|<!ENTITY version "\([^"]*\)">|\1|p' $plg)" = "$version" ] || { echo "tofuman.plg is not at version $version"; exit 1; }
-          set -- $(sh sources/plugin/ci/package.sh "$version")
-          expected=$(sed -n 's|<!ENTITY sha256 "\([0-9a-f]*\)">|\1|p' $plg)
-          [ "$2" = "$expected" ] || { echo "the package hashes to $2, and tofuman.plg expects $expected"; exit 1; }
+          grep -q "^### $version\$" $plg || { echo "the CHANGES of tofuman.plg have no heading for $version (REQ-PKG-24)"; exit 1; }
+          set -- $(sh sources/plugin/ci/package.sh "$version" --plg)
           echo "PACKAGE=$1" >> "$GITHUB_ENV"
-      - name: Publish the release
+      - name: Publish the candidate release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --title "tofuman plugin ${GITHUB_REF_NAME#plugin-}" --notes "Install or update from sources/plugin/tofuman.plg on main." "$PACKAGE" sources/plugin/tofuman.plg
+        run: |
+          version=${GITHUB_REF_NAME#plugin-}
+          url="https://github.com/${GITHUB_REPOSITORY}/releases/download/$GITHUB_REF_NAME/tofuman.plg"
+          notes="Candidate release. Install it in the webgui (Plugins, Install Plugin) from $url, run the end-to-end procedure of docs/SPEC.md section 18, and promote it by committing this tofuman.plg to sources/plugin/ on main."
+          gh release create "$GITHUB_REF_NAME" --prerelease --title "tofuman plugin $version (candidate)" --notes "$notes" "$PACKAGE" sources/plugin/tofuman.plg

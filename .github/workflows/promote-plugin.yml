@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# The promotion of a candidate release (REQ-PKG-25 to REQ-PKG-27): a push that puts the .plg file
+# of a candidate on main. The workflow checks that the .plg file on main is the one of the
+# candidate, and that its hash is the hash of the candidate's package, and only then marks the
+# release as no longer a pre-release. A push that leaves the version of a promoted release alone,
+# such as notes for the next version, finds that release promoted already and does nothing.
+name: promote-plugin
+
+on:
+  push:
+    branches: [main]
+    paths: ['sources/plugin/tofuman.plg']
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the candidate and promote it
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          plg=sources/plugin/tofuman.plg
+          version=$(sed -n 's|<!ENTITY version "\([^"]*\)">|\1|p' $plg)
+          expected=$(sed -n 's|<!ENTITY sha256 "\([0-9a-f]*\)">|\1|p' $plg)
+          tag="plugin-$version"
+          prerelease=$(gh release view "$tag" --json isPrerelease --jq .isPrerelease) || { echo "there is no release $tag to promote"; exit 1; }
+          if [ "$prerelease" != "true" ]; then
+            echo "$tag is promoted already; nothing to do"
+            exit 0
+          fi
+          gh release download "$tag" --pattern "tofuman-$version.tgz" --pattern tofuman.plg --dir candidate
+          actual=$(sha256sum "candidate/tofuman-$version.tgz" | cut -d' ' -f1)
+          [ "$actual" = "$expected" ] || { echo "the package of $tag hashes to $actual, and tofuman.plg on main names $expected"; exit 1; }
+          cmp candidate/tofuman.plg $plg || { echo "tofuman.plg on main differs from the .plg file of the candidate $tag"; exit 1; }
+          gh release edit "$tag" --prerelease=false --latest
+          echo "promoted $tag"

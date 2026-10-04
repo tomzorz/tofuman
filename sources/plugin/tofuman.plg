@@ -1,6 +1,6 @@
 <?xml version='1.0' standalone='yes'?>
 <!-- SPDX-License-Identifier: GPL-2.0-or-later -->
-<!-- The release step, ci/package.sh with its plg option, writes the version and sha256 entities (REQ-PKG-16 to REQ-PKG-20). -->
+<!-- The release workflow writes the version and sha256 entities into the .plg file of each candidate release, and a promotion brings that file here unchanged (REQ-PKG-23 to REQ-PKG-27). -->
 <!DOCTYPE PLUGIN [
 <!ENTITY name "tofuman">
 <!ENTITY author "tomzorz">
@@ -12,11 +12,28 @@
 <!ENTITY packageURL "https://github.com/&github;/releases/download/plugin-&version;/&package;">
 ]>
 
-<PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" support="https://github.com/&github;" icon="code" min="7.3.2">
+<!-- REQ-PKG-21 and REQ-PKG-22: the plugin manager shows CHANGES as the release notes, links the icon to launch, and refuses an Unraid release below min. -->
+<PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" support="https://github.com/&github;/issues" icon="code" launch="Docker" min="7.3.2">
 
 <CHANGES>
-### &version;
-- See https://github.com/&github;/releases/tag/plugin-&version;
+### 2026.10.04
+- tofu plan names each check that the server would refuse, before anything changes (with provider 0.2.0).
+- A container that stops or restarts within its start check (10 seconds unless start_check says otherwise) fails the apply with its exit code and last log lines; an update puts the previous container back.
+- Every operation leaves a line in operations.jsonl: its steps with timings, the docker command with masked values hidden, the pull digest, and the error.
+- The tab shows the status at a glance, icons, WebUI links, whether each hand-made container can be adopted, Adopt for several containers at once, import blocks to paste into tofu, what the policy lacks with a button that adds it, each operation step by step, the last 7 days, and a diagnostics file to download.
+- A tofu badge marks the managed containers on the Docker page.
+- Unraid notifications when an operation fails, and when an Unraid release is untested.
+- The policy can allow --ipc host for one container ("ipcHost": true in its exception).
+- An update or a delete of a container without an icon no longer deletes the Docker page's default icon until the next boot (webgui 7.3.2).
+
+### 2026.10.03
+- A mutation no longer fails with "Bad Request Exception": unraid-api's global ValidationPipe no longer sees the definition.
+
+### 2026.10.02
+- The tested build counts only webgui files, local_prepend.php included, so a real server matches it.
+
+### 2026.09.28
+- First release.
 </CHANGES>
 
 <!-- The package stays on the flash drive, so each boot installs it without a download. -->

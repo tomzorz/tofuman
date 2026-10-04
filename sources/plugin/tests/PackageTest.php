@@ -22,6 +22,14 @@ function test_the_plg_file_parses_like_the_plugin_manager_reads_it(): void {
     check(!str_contains((string)$file->INLINE, '&'), "an entity stayed unexpanded in: {$file->INLINE}");
   }
   same('remove', (string)$xml->FILE[2]->attributes()->Method);
+  // REQ-PKG-21 and REQ-PKG-22
+  check(str_contains((string)$xml->CHANGES, "### $version"), "the release notes have no heading for $version");
+  same('https://github.com/tomzorz/tofuman/issues', (string)$xml->attributes()->support);
+  same('Docker', (string)$xml->attributes()->launch);
+  check((string)$xml->attributes()->icon !== '', 'the plugin has no icon');
+  $releases = array_map(fn(array $build) => substr($build['name'], strlen('unraid-')), Tofuman\Json::read(dirname(__DIR__) . '/shim/tested-builds.json')['builds']);
+  usort($releases, version_compare(...));
+  same($releases[0], (string)$xml->attributes()->min, 'min is the oldest Unraid release with a tested build');
 }
 
 function test_the_api_module_goes_into_unraid_api_and_out_again(): void {
