@@ -2,8 +2,10 @@
 # The promotion of a candidate release (REQ-PKG-25 to REQ-PKG-27): a push that puts the .plg file
 # of a candidate on main. The workflow checks that the .plg file on main is the one of the
 # candidate, and that its hash is the hash of the candidate's package, and only then marks the
-# release as no longer a pre-release. A push that leaves the version of a promoted release alone,
-# such as notes for the next version, finds that release promoted already and does nothing.
+# release as no longer a pre-release, with the title of a promoted release and the CHANGES of its
+# version as notes in place of the candidate's. A push that leaves the version of a promoted
+# release alone, such as notes for the next version, finds that release promoted already and does
+# nothing.
 name: promote-plugin
 
 on:
@@ -36,5 +38,7 @@ jobs:
           actual=$(sha256sum "candidate/tofuman-$version.tgz" | cut -d' ' -f1)
           [ "$actual" = "$expected" ] || { echo "the package of $tag hashes to $actual, and tofuman.plg on main names $expected"; exit 1; }
           cmp candidate/tofuman.plg $plg || { echo "tofuman.plg on main differs from the .plg file of the candidate $tag"; exit 1; }
-          gh release edit "$tag" --prerelease=false --latest
+          changes=$(awk -v heading="### $version" '$0 == heading { on = 1; next } /^### |<\/CHANGES>/ { on = 0 } on && NF' $plg)
+          notes=$(printf 'Install or update from sources/plugin/tofuman.plg on main.\n\n%s\n' "$changes")
+          gh release edit "$tag" --prerelease=false --latest --title "tofuman plugin $version" --notes "$notes"
           echo "promoted $tag"

@@ -793,7 +793,7 @@ Candidate releases, decided 2026-10-04: a server installs only a released plugin
 - REQ-PKG-23: For each plugin tag, the release workflow MUST publish a candidate release: a GitHub pre-release with the package and with a `.plg` file that names the version of the tag and the hash of that package.
 - REQ-PKG-24: The release workflow MUST refuse a tag whose version has no heading in the `CHANGES` element of the `.plg` file.
 - REQ-PKG-25: To promote a candidate release, a maintainer MUST put the `.plg` file of that candidate release, unchanged, at `sources/plugin/tofuman.plg` on `main`.
-- REQ-PKG-26: On that push, the promotion workflow MUST check that the hash in the `.plg` file is the hash of the package of the candidate release, and that the `.plg` file equals the `.plg` file of the candidate release. If both checks pass, the promotion workflow MUST mark the release as no longer a pre-release. If either check fails, the promotion workflow MUST fail, and the release stays a pre-release.
+- REQ-PKG-26: On that push, the promotion workflow MUST check that the hash in the `.plg` file is the hash of the package of the candidate release, and that the `.plg` file equals the `.plg` file of the candidate release. If both checks pass, the promotion workflow MUST mark the release as no longer a pre-release. The promotion workflow MUST then replace the candidate title and notes of the release with the title `tofuman plugin <version>` and the `CHANGES` of that version (added 2026-10-05). If either check fails, the promotion workflow MUST fail, and the release stays a pre-release.
 - REQ-PKG-27: The version in the `.plg` file on `main` MUST change only through a promotion.
 
 The `.plg` file of a candidate release keeps the `pluginURL` of `main` (REQ-PKG-18), so a server that installed the candidate release sees each later promotion as an update.
@@ -804,7 +804,7 @@ Release procedure:
 2. Tag that commit `plugin-YYYY.MM.DD`, and push the tag. The release workflow publishes the candidate release.
 3. In the webgui of a server, open Plugins, then Install Plugin, and install `https://github.com/tomzorz/tofuman/releases/download/plugin-YYYY.MM.DD/tofuman.plg`.
 4. Run the end-to-end procedure of section 18 on that server.
-5. Download the `.plg` file of the candidate release over `sources/plugin/tofuman.plg`, commit it, and push the commit to `main`. The promotion workflow marks the release as no longer a pre-release.
+5. Download the `.plg` file of the candidate release over `sources/plugin/tofuman.plg`, commit it, and push the commit to `main`. The promotion workflow marks the release as no longer a pre-release, and gives it the notes of its version.
 
 If step 4 fails, do not run step 5. A fix goes out as a new candidate release with a new tag.
 
