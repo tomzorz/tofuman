@@ -1,6 +1,6 @@
 # tofuman specification
 
-Status: draft, 2026-09-28. A design interview on 2026-09-27, spike 1 on 2026-09-28, and a spec review on 2026-09-28 decided the requirements below. Section 20 lists what is still open.
+Status: draft, 2026-09-28. A design interview on 2026-09-27, spike 1 on 2026-09-28, and a spec review on 2026-09-28 decided the requirements below. Two rounds of questions on 2026-10-04 added the checks at plan time, the start check, the operation log, the notifications, the diagnostics file, the badge, and the rework of the tab. Section 20 lists what is still open.
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in BCP 14 (RFC 2119, RFC 8174) when, and only when, they appear in all capitals, as shown here.
 
@@ -106,6 +106,18 @@ Do not use: write, change, request.
 The background work that a mutation starts. The provider polls an operation until the operation ends.
 Do not use: job, task, run.
 
+### operation log (noun)
+The file `/boot/config/plugins/tofuman/operations.jsonl`, with one JSON line per operation that ended.
+Do not use: job log, history, operation history.
+
+### start check (noun)
+The wait after the shim starts a container in an operation, in which the shim watches whether the container keeps running.
+Do not use: health check (Docker uses that name for a different test), crash check, liveness check.
+
+### policy gap (noun)
+One entry that a definition needs from the policy and that the policy lacks: a bind root, a network, an `ExtraParams` flag, or an exception.
+Do not use: missing permission, policy need, violation.
+
 ### drift (noun)
 A difference between the definition in the OpenTofu state and the definition that the API module reads from the template.
 Do not use: divergence, out-of-band change.
@@ -118,9 +130,21 @@ Do not use: pin, supported version, known-good hashes.
 The file `/boot/config/plugins/tofuman/audit.jsonl`, with one JSON line per mutation and per adoption.
 Do not use: log, history, journal.
 
+### candidate release (noun)
+A plugin release that the release workflow publishes as a GitHub pre-release, before a person has run the end-to-end procedure of section 18 with it.
+Do not use: beta, pre-release (GitHub's word for the flag), draft.
+
 ### throwaway container (noun)
 A container that exists only for a test, and that the tester removes after the test.
 Do not use: test container, scratch container.
+
+### diagnostics file (noun)
+The JSON file that the tab offers for download, with the facts that a maintainer needs to find the cause of a failure.
+Do not use: support bundle, dump, report.
+
+### badge (noun)
+The mark that the plugin adds beside the name of each managed container on the **Docker** page of the webgui.
+Do not use: tag, label (Docker uses that name), icon.
 
 ## 2. Scope
 
@@ -186,11 +210,11 @@ The **Update** action, `rebuild_container`, and CA Auto Update rebuild a contain
 - REQ-VAL-3: The provider MUST send `ExtraParams` and `PostArgs` as lists of arguments.
 - REQ-VAL-4: The shim MUST store `ExtraParams` and `PostArgs` as their arguments, each argument quoted with `escapeshellarg`, joined by one space.
 - REQ-VAL-5: When the shim reads `ExtraParams` or `PostArgs` from a template, the shim MUST split the text into arguments by the quoting rules of a POSIX shell.
-- REQ-VAL-6: The API module MUST refuse an `ExtraParams` flag that the policy list `extraParamFlags` does not contain.
+- REQ-VAL-6: The API module MUST refuse an `ExtraParams` flag that the policy list `extraParamFlags` does not contain. The flag `--ipc` is the exception, because REQ-POL-11 governs it.
 - REQ-VAL-7: The API module MUST refuse each `ExtraParams` flag in the following groups, even if the policy lists the flag:
   - Mounts: `-v`, `--volume`, `--mount`, `--volumes-from`.
   - Privilege: `--privileged`, `--cap-add`, `--security-opt`, `--device`, `--cgroup-parent`.
-  - Namespaces: `--pid`, `--ipc`, `--uts`, `--userns`.
+  - Namespaces: `--pid`, `--uts`, `--userns`.
   - Network: `--net`, `--network`, `--ip`, `--ip6`, `--mac-address`, `-p`, `--publish`.
   - Environment and labels: `-e`, `--env`, `--env-file`, `-l`, `--label`, `--label-file`.
   - Host files: `--cidfile`.
@@ -207,6 +231,7 @@ The **Update** action, `rebuild_container`, and CA Auto Update rebuild a contain
 - REQ-VAL-18: The API module MUST refuse a network that does not exist on the server. Reason: `xmlToVar` reads an unknown network as `none` (spike 1), so the definition would show drift after every apply.
 - REQ-VAL-19: The API module MUST refuse a definition that enables Tailscale.
 - REQ-VAL-20: The API module MUST refuse a definition that changes when it goes through `postToXML` and back through `xmlToVar`, and MUST name each field that changes.
+- REQ-VAL-21: The API module MUST refuse an `--ipc` flag whose value is not `host` (added 2026-10-04 with REQ-POL-11).
 
 REQ-VAL-20 exists because the read path of DockerMan rewrites some strings on its own. `xmlToVar` removes backslashes from `Overview`, removes `<` and `>` from each string that looks like HTML, and removes whitespace from the name. Without REQ-VAL-20, such a definition would show drift after every apply.
 
@@ -224,8 +249,9 @@ The policy decides what a mutation can put into a template, beyond the checks in
 - REQ-POL-6: The API module MUST refuse a device config entry, unless the `devices` list of the exception for the container contains the device path.
 - REQ-POL-7: The API module MUST refuse a network other than `host` that the policy list `networks` does not contain.
 - REQ-POL-8: The API module MUST NOT offer a mutation that changes the policy.
-- REQ-POL-9: The API module MUST NOT apply the policy to queries.
+- REQ-POL-9: A query MUST NOT fail because of the policy. The query `check` returns the failed checks of the policy as its answer (changed 2026-10-04 for the checks at plan time of REQ-PRV-15).
 - REQ-POL-10: A change to the policy MUST NOT change an existing container. The API module applies the new policy at the next mutation of each container.
+- REQ-POL-11: The API module MUST refuse `--ipc host`, unless the policy lists the container in `exceptions` with `"ipcHost": true` (decided 2026-10-04). Reason: some GPU workloads document `--ipc host` as their way to share memory, and the host IPC namespace is as much a decision of a person as the host network.
 
 ## 8. API keys
 
@@ -258,7 +284,8 @@ An operation for `createContainer` or `updateContainer` runs these steps in orde
 4. For `updateContainer`, the shim stops the old container and removes the old container.
 5. The shim creates the container with the command from `xmlToCommand`.
 6. The shim starts the container by REQ-DEF-7.
-7. The API module updates the registry and appends a line to the audit log.
+7. If step 6 started the container, the shim runs the start check.
+8. The API module updates the registry and appends a line to the audit log.
 
 - REQ-MUT-8: If step 1 or step 2 fails, the shim MUST leave the template and the old container unchanged.
 - REQ-MUT-9: If an update fails after step 3, the shim MUST restore the previous template and recreate the previous container from that template.
@@ -272,6 +299,23 @@ An operation for `createContainer` or `updateContainer` runs these steps in orde
 - REQ-MUT-13: `deleteContainer` MUST keep the image and the host paths of the container.
 - REQ-MUT-14: The API module MUST append one line to the audit log for each mutation. This rule covers a mutation that succeeds, a mutation that fails, and a mutation that the API module refuses.
 - REQ-MUT-15: The API module MUST keep at most the last 1000 lines in the audit log.
+
+The start check, decided 2026-10-04: a fresh build that dies at its start fails the apply, so that `tofu apply` never reports a container that does not run.
+
+- REQ-MUT-16: `createContainer` and `updateContainer` MUST take the length of the start check in seconds, from 0 to 600. The default length MUST be 10 seconds.
+- REQ-MUT-17: If the length of the start check is 0, the shim MUST skip the start check.
+- REQ-MUT-18: The start check MUST fail if the container stops or restarts before the length of the start check passes.
+- REQ-MUT-19: A failed start check MUST fail the operation at the step `start check`, and REQ-MUT-9 and REQ-MUT-10 apply. The error MUST name the exit code of the container and MUST hold the last 30 lines of the log of the container.
+
+The operation log and the notifications, decided 2026-10-04 so that a person and a maintainer can find the cause of a failure:
+
+- REQ-MUT-20: When an operation ends, the shim MUST append one line to the operation log (section 16.4).
+- REQ-MUT-21: The shim MUST keep at most the last 200 lines in the operation log.
+- REQ-MUT-22: While an operation runs, the shim MUST keep the line of that operation, with the steps so far, in `/var/run/tofuman-operation.json`. When the operation ends, the shim MUST delete that file.
+- REQ-MUT-23: When an operation fails, the shim MUST raise an Unraid notification with the importance warning. The notification MUST name the container, the mutation, and the step, and MUST link to the **Docker** page, which holds the tab.
+- REQ-MUT-24: A failure to raise a notification MUST NOT change the result of the operation.
+- REQ-MUT-25: The query `check` MUST run the checks of REQ-MUT-2 without a mutation, and MUST NOT append a line to the audit log.
+- REQ-MUT-26: When the shim removes a container, the shim MUST NOT delete the default icon of DockerMan. Reason: the webgui at tag `7.3.2` records that shared icon for each container without an icon of its own, and `removeContainer` then deletes the recorded icon from RAM until the next boot (found 2026-10-04; the webgui guards that icon from tag `7.3.3-rc.1` on).
 
 ## 10. Mounts
 
@@ -299,6 +343,8 @@ A bind mount whose host path is missing makes Docker create the directory on the
 
 CA Auto Update moves the image of a container with a tag, if a person opts that container in. DockerMan's update check cannot parse a digest reference. A container with a digest therefore shows a blank update status, and CA Auto Update never updates that container (spike 1, read in the code).
 
+Decided 2026-10-04: tofu does not move the image of a tag, not even while a person tests a fresh build. A new build of a tag reaches a managed container through **Update** or CA Auto Update. To make tofu create a container again, a person runs `tofu apply -replace` on the resource, which deletes the container and creates it with a new managed ID.
+
 ## 12. Unraid upgrades
 
 - REQ-UPG-1: Each plugin release MUST list its tested builds.
@@ -307,23 +353,29 @@ CA Auto Update moves the image of a container with a tag, if a person opts that 
 - REQ-UPG-4: If the webgui files on the server match no tested build, the API module MUST keep answering queries.
 - REQ-UPG-5: A maintainer MUST add a tested build only through a plugin release.
 - REQ-UPG-6: The tab MUST NOT offer a switch that allows mutations on an untested build (decided 2026-09-28).
+- REQ-UPG-7: When unraid-api loads the API module and the webgui files match no tested build, the API module MUST raise one Unraid notification with the importance alert. The notification MUST say that tofuman refuses every mutation until a plugin release covers the Unraid release (added 2026-10-04).
 
-For each new Unraid release, a maintainer runs this procedure before a plugin release adds the tested build:
+Research 2026-10-04: no stable Unraid release after 7.3.2 exists yet. The webgui tag `7.3.3-rc.2` changes one file of the tested build, `DockerClient.php`, where `removeContainer` stops deleting the default icon (REQ-MUT-26). unraid-api 4.37.4 loads plugins as 4.35.1 does, with the same global `ValidationPipe`. A tested build for 7.3.3 therefore needs new hashes only.
+
+For each new Unraid release, a maintainer runs this procedure:
 
 1. Check out the webgui at the tag of the new Unraid release.
 2. Run the shim tests against that checkout.
 3. Check that no official handler of the matching unraid-api requires `DOCKER:CREATE_ANY`.
-4. Run the end-to-end procedure of section 18 on a server with the new Unraid release.
-5. Add the tested build to the plugin, and release the plugin.
+4. Add the tested build to the plugin, and publish a candidate release (section 17).
+5. On a server with the new Unraid release, a person installs the candidate release and runs the end-to-end procedure of section 18.
+6. Promote the candidate release.
 
-If step 2, 3, or 4 fails, do not add the tested build. Fix the plugin first, and start again at step 1.
+If step 2, 3, or 5 fails, do not promote the candidate release. Fix the plugin first, and start again at step 1.
 
 ## 13. The tab
 
 - REQ-TAB-1: The plugin MUST add the tab with `Menu="Docker:2"` and the title `tofuman`.
 - REQ-TAB-2: For each managed container, the tab MUST show the following facts:
-  - The name and the managed ID.
-  - The time of the last mutation, in UTC.
+  - The name, the icon, and the managed ID.
+  - The image, and the network with its addresses.
+  - A link to the WebUI, if the definition has a `WebUI` value, with the placeholders filled in as the **Docker** page fills them.
+  - The time of the last mutation.
   - Whether the definition changed since the last mutation.
   - Whether the container runs.
 - REQ-TAB-3: The tab MUST decide whether the definition changed since the last mutation by comparing the SHA-256 hash of the definition with the hash in the registry.
@@ -342,7 +394,33 @@ If step 2, 3, or 4 fails, do not add the tested build. Fix the plugin first, and
 - REQ-TAB-12: The tab MUST NOT change stock webgui pages with JavaScript.
 - REQ-TAB-13: The tab MUST read and write the plugin files on the flash drive through its own PHP endpoint, and MUST send the CSRF token of the webgui with each POST.
 
-The tab does not show the OpenTofu address of a resource, because OpenTofu does not tell a provider that address (decided 2026-09-28). A person finds the resource by the container name.
+The tab does not show the OpenTofu address of a resource, because OpenTofu does not tell a provider that address (decided 2026-09-28). A person finds the resource by the container name, and the `import` blocks of REQ-TAB-25 propose an address.
+
+The rework of 2026-10-04 makes the tab the place where a person moves containers into tofu and finds out why a mutation failed:
+
+- REQ-TAB-18: The tab MUST show each time as the time since that moment, and MUST show the UTC time when a pointer rests on it.
+- REQ-TAB-19: At the top, the tab MUST show the version of the plugin, the result of REQ-TAB-11, the load state of the API module (REQ-PKG-3), and the number of API keys on the key allowlist.
+- REQ-TAB-20: The tab MUST use the table styles and the status styles of the webgui, and MUST follow the theme that the webgui uses.
+- REQ-TAB-21: The tab MUST refresh its facts every 30 seconds, and every 5 seconds while an operation runs.
+- REQ-TAB-22: While an operation runs, the tab MUST show the container, the mutation, and the step that runs.
+- REQ-TAB-23: For each hand-made container, the tab MUST show whether **Adopt** would succeed, and MUST name each check that would refuse the adoption.
+- REQ-TAB-24: The tab MUST let a person adopt several hand-made containers in one action. The plugin MUST adopt each of them by REQ-TAB-5 to REQ-TAB-17, with one line in the audit log for each container.
+- REQ-TAB-25: For each managed container, the tab MUST offer an OpenTofu `import` block that names the container. The tab MUST also offer one text with the `import` blocks of all managed containers. Each block MUST name the resource `tofuman_container.<label>`, where `<label>` is the container name in lowercase, with each character outside `a-z`, `0-9`, and `_` replaced by `_`, and with `_` in front of a leading digit.
+- REQ-TAB-26: The tab MUST list each policy gap of each managed container.
+- REQ-TAB-27: The tab MUST also list each policy gap of the last 20 containers whose mutation or query `check` the policy refused, and MUST leave out each gap that the policy has closed since. To serve that list, the shim MUST keep those policy gaps in `/var/run/tofuman-gaps.json`.
+- REQ-TAB-28: The tab MUST let a person copy a selection of the listed policy gaps into the policy editor. The tab MUST NOT save the policy without the action **Save policy** of a person.
+- REQ-TAB-29: For a host path outside every bind root, the policy gap MUST propose the directory that the first three segments of the host path name, for example `/mnt/user/appdata/` for `/mnt/user/appdata/example/config`.
+- REQ-TAB-30: For each line of the audit log that names an operation, the tab MUST show the line of that operation from the operation log, on request.
+- REQ-TAB-31: The tab MUST show, for the last 7 days, the number of mutations that succeeded, that failed, and that the API module refused, and the median duration of an operation.
+- REQ-TAB-32: The tab MUST offer the diagnostics file for download (section 16.5).
+
+### 13.1 The badge
+
+The badge lets a person see on the **Docker** page which containers tofu manages (added 2026-10-04, after spike 3).
+
+- REQ-TAB-33: The plugin MUST show the badge beside the name of each managed container on the **Docker** page.
+- REQ-TAB-34: The plugin MUST draw the badge with CSS alone. Reason: REQ-TAB-12.
+- REQ-TAB-35: The badge MUST NOT hide, move, or cover a control of the **Docker** page.
 
 ## 14. The provider
 
@@ -362,6 +440,16 @@ The tab does not show the OpenTofu address of a resource, because OpenTofu does 
   - A `shell` that is not exactly one of `sh` or `bash`.
   - A `mac_address` that is neither empty nor 6 lowercase pairs of hexadecimal digits joined by `:`.
   - A block with an empty value and a non-empty `default`.
+
+Added 2026-10-04, so that a refusal shows in the plan and a failure explains itself:
+
+- REQ-PRV-14: The provider MUST send its version in the header `x-tofuman-provider` with each request.
+- REQ-PRV-15: During the plan, for each `tofuman_container` that the plan creates, updates, or deletes, the provider MUST ask the query `check` for the failed checks of that mutation. The provider MUST show each failed check as an error of the plan.
+- REQ-PRV-16: If a value of the definition is unknown during the plan, the provider MUST skip the query `check` for that resource.
+- REQ-PRV-17: The provider MUST log each request to the API module with its duration, and each state of each operation that it polls, at the level `DEBUG` of the OpenTofu log.
+- REQ-PRV-18: The error of a failed operation MUST name the operation ID, the step, and the error of the operation. If a refusal names a policy gap, the error MUST say that a person changes the policy in the tab.
+- REQ-PRV-19: The provider MUST send the length of `start_check` with each `createContainer` and each `updateContainer` whose `start_check` differs from the default of 10 seconds. Reason: a plugin from before the start check refuses the argument, and the default needs no argument.
+- REQ-PRV-20: If a plan changes only `start_check`, the provider MUST change the state without a mutation. Reason: the length of the start check is not part of the template.
 
 ### 14.1 Resource schema
 
@@ -393,6 +481,7 @@ Attributes of `tofuman_container`:
 | `donate_text` | string | no | empty | `DonateText` |
 | `donate_link` | string | no | empty | `DonateLink` |
 | `requires` | string | no | empty | `Requires` |
+| `start_check` | string | no | `10s` | none: each mutation carries it (REQ-MUT-16) |
 
 Blocks of `tofuman_container`, each of which becomes one config entry:
 
@@ -408,6 +497,8 @@ Blocks of `tofuman_container`, each of which becomes one config entry:
 Each block also takes the optional attributes `display_name`, `description`, `display` (default `always`), `required` (default false), and `default`. `display_name` defaults to the target of the config entry, and for a `device` block to `host_path`, because a device entry has an empty target. `mode` of `path` takes exactly one of `rw`, `ro`, `rw,slave`, `rw,shared`, `ro,slave`, or `ro,shared`.
 
 On macvlan, ipvlan, and host networks, DockerMan exports a `port` block as the variable `TCP_PORT_<container_port>` or `UDP_PORT_<container_port>` instead of a port mapping.
+
+`start_check` takes a whole number of seconds as a duration from `0s` to `10m`, for example `30s`. The value `0s` turns the start check off, for a container that ends on its own.
 
 Configuration of the provider:
 
@@ -439,12 +530,21 @@ type TofumanQuery {
   container(id: ID, name: String): TofumanContainer
   containers: [TofumanContainer!]!
   operation(id: ID!): TofumanOperation!
+  "The checks of a mutation, without the mutation: a definition alone checks createContainer, an id and a definition check updateContainer, and an id alone checks deleteContainer."
+  check(id: ID, definition: TofumanDefinitionInput): TofumanCheck!
 }
 
 type TofumanMutation {
-  createContainer(definition: TofumanDefinitionInput!): TofumanOperation!
-  updateContainer(id: ID!, definition: TofumanDefinitionInput!): TofumanOperation!
+  createContainer(definition: TofumanDefinitionInput!, startCheckSeconds: Int! = 10): TofumanOperation!
+  updateContainer(id: ID!, definition: TofumanDefinitionInput!, startCheckSeconds: Int! = 10): TofumanOperation!
   deleteContainer(id: ID!): TofumanOperation!
+}
+
+type TofumanCheck {
+  "Each failed check. An empty list means that the API module would accept the mutation."
+  failedChecks: [String!]!
+  "How many of the failed checks are policy gaps."
+  policyGaps: Int!
 }
 
 type TofumanContainer {
@@ -564,6 +664,8 @@ input TofumanConfigEntryInput {
 }
 ```
 
+A refusal of a mutation carries the failed checks in the extension `errors` and the number of policy gaps among them in the extension `policyGaps`, next to the code `TOFUMAN_REFUSED`.
+
 ## 16. Files on the flash drive
 
 The plugin keeps its files in `/boot/config/plugins/tofuman/`. Every file is UTF-8 JSON.
@@ -596,7 +698,7 @@ The plugin keeps its files in `/boot/config/plugins/tofuman/`. Every file is UTF
   "networks": ["bridge"],
   "extraParamFlags": [],
   "exceptions": {
-    "example": { "privileged": false, "hostNetwork": false, "devices": [] }
+    "example": { "privileged": false, "hostNetwork": false, "ipcHost": false, "devices": [] }
   }
 }
 ```
@@ -610,10 +712,39 @@ The plugin keeps its files in `/boot/config/plugins/tofuman/`. Every file is UTF
 Each line is one JSON object:
 
 ```json
-{"time":"2026-09-28T12:05:00Z","caller":"<API key ID, or webgui, or cli>","callerName":"<API key name>","action":"updateContainer","managedId":"8f1c2d3e-0000-4000-8000-000000000000","name":"example","result":"succeeded","error":null}
+{"time":"2026-09-28T12:05:00Z","caller":"<API key ID, or webgui, or cli>","callerName":"<API key name>","providerVersion":"0.2.0","action":"updateContainer","managedId":"8f1c2d3e-0000-4000-8000-000000000000","name":"example","result":"succeeded","error":null,"operationId":"5b0e7a51-0000-4000-8000-000000000000","durationMs":4120,"changes":["repository","variable GREETING"]}
 ```
 
-`action` is exactly one of `createContainer`, `updateContainer`, `deleteContainer`, or `adopt`. `result` is exactly one of `succeeded`, `failed`, or `refused`.
+`action` is exactly one of `createContainer`, `updateContainer`, `deleteContainer`, or `adopt`. `result` is exactly one of `succeeded`, `failed`, or `refused`. `providerVersion` is the value of the header `x-tofuman-provider`, or null. `operationId` and `durationMs` are null for an adoption and for a refusal.
+
+- REQ-FILE-4: The audit line of an `updateContainer` MUST name each field and each config entry that the mutation changes in `changes`, and `changes` MUST be empty for the other actions. A config entry goes by its type and its target, for example `variable GREETING`.
+- REQ-FILE-5: `changes` MUST NOT hold a value.
+
+### 16.4 The operation log
+
+Each line is one JSON object, added 2026-10-04:
+
+```json
+{"id":"5b0e7a51-0000-4000-8000-000000000000","mutation":"updateContainer","caller":"<API key ID>","callerName":"<API key name>","providerVersion":"0.2.0","managedId":"8f1c2d3e-0000-4000-8000-000000000000","name":"example","queuedAt":"2026-10-04T12:00:00Z","startedAt":"2026-10-04T12:00:01Z","endedAt":"2026-10-04T12:00:16Z","durationMs":15020,"result":"failed","step":"start check","error":"<the error of the operation>","changes":["variable GREETING"],"steps":[{"step":"pull","startedAt":"2026-10-04T12:00:01Z","ms":2100,"digest":"sha256:<64 hexadecimal digits>"},{"step":"create","startedAt":"2026-10-04T12:00:04Z","ms":400,"command":"docker create <arguments>","output":"<container ID>"},{"step":"start check","startedAt":"2026-10-04T12:00:05Z","ms":3000,"exitCode":3,"log":["<log line>"]}]}
+```
+
+`result` is exactly one of `succeeded` or `failed`. `step` and `error` are null for an operation that succeeded. Each entry of `steps` names one step of section 9, with the time it started and its duration in milliseconds, and holds the facts of that step: the digest after a pull, the command and its output for a create, and the exit code and the log lines of a failed start check.
+
+- REQ-FILE-6: The command in the operation log MUST show the value of each config entry with mask true as `***`.
+- REQ-FILE-7: Elsewhere in the operation log, in the audit log, and in the error of an operation, the shim MUST show each occurrence of the value of a config entry with mask true as `***`, if that value has at least 4 characters. Reason: the log lines of a container are free text, and a shorter value would turn ordinary words into `***`.
+
+### 16.5 The diagnostics file
+
+The diagnostics file holds the following facts, added 2026-10-04:
+
+- The versions of Unraid and of the plugin, and the load record of the API module (REQ-PKG-15).
+- The result of REQ-TAB-11, with each webgui file that does not match.
+- The policy, the registry, the audit log, and the operation log.
+- The definition of each managed container, and the networks on the server.
+- The policy gaps of REQ-TAB-26 and REQ-TAB-27.
+- The last 200 lines of the log of unraid-api that name tofuman.
+
+- REQ-FILE-8: The diagnostics file MUST NOT hold an API key, and MUST show the value of each config entry with mask true as `***`.
 
 ## 17. Packaging and installation
 
@@ -641,7 +772,32 @@ Releases (decided 2026-09-28):
 - REQ-PKG-17: The tag of a provider release MUST be `provider-vX.Y.Z`, with a semantic version.
 - REQ-PKG-18: The `.plg` file MUST live at `sources/plugin/tofuman.plg` on `main`, and its `pluginURL` MUST be the raw GitHub URL of that file.
 - REQ-PKG-19: The `.plg` file MUST download the package from the assets of the plugin release, and MUST check the SHA256 hash of the package.
-- REQ-PKG-20: The build of the package MUST be reproducible. The release workflow MUST refuse to publish a package whose SHA256 hash differs from the hash in the `.plg` file of the tagged commit.
+- REQ-PKG-20: The build of the package MUST be reproducible.
+
+The plugin manager of the webgui shows the release notes, the icon, and the support link of a `.plg` file, and refuses a `.plg` file below its `min` (added 2026-10-04):
+
+- REQ-PKG-21: The `.plg` file MUST hold the release notes of each release in its `CHANGES` element.
+- REQ-PKG-22: The `.plg` file MUST name an icon, the issues page of the repository as `support`, the **Docker** page as `launch`, and the oldest Unraid release that a tested build covers as `min`.
+
+Candidate releases, decided 2026-10-04: a server installs only a released plugin, so each plugin release starts as a candidate release, and the `.plg` file on `main` takes its version only after the end-to-end procedure passed with it (REQ-TST-8).
+
+- REQ-PKG-23: For each plugin tag, the release workflow MUST publish a candidate release: a GitHub pre-release with the package and with a `.plg` file that names the version of the tag and the hash of that package.
+- REQ-PKG-24: The release workflow MUST refuse a tag whose version has no heading in the `CHANGES` element of the `.plg` file.
+- REQ-PKG-25: To promote a candidate release, a maintainer MUST put the `.plg` file of that candidate release, unchanged, at `sources/plugin/tofuman.plg` on `main`.
+- REQ-PKG-26: On that push, the promotion workflow MUST check that the hash in the `.plg` file is the hash of the package of the candidate release, and that the `.plg` file equals the `.plg` file of the candidate release. If both checks pass, the promotion workflow MUST mark the release as no longer a pre-release. If either check fails, the promotion workflow MUST fail, and the release stays a pre-release.
+- REQ-PKG-27: The version in the `.plg` file on `main` MUST change only through a promotion.
+
+The `.plg` file of a candidate release keeps the `pluginURL` of `main` (REQ-PKG-18), so a server that installed the candidate release sees each later promotion as an update.
+
+Release procedure:
+
+1. Add the heading and the notes of the new version to `CHANGES` in `sources/plugin/tofuman.plg`, and push the commit to `main`.
+2. Tag that commit `plugin-YYYY.MM.DD`, and push the tag. The release workflow publishes the candidate release.
+3. In the webgui of a server, open Plugins, then Install Plugin, and install `https://github.com/tomzorz/tofuman/releases/download/plugin-YYYY.MM.DD/tofuman.plg`.
+4. Run the end-to-end procedure of section 18 on that server.
+5. Download the `.plg` file of the candidate release over `sources/plugin/tofuman.plg`, commit it, and push the commit to `main`. The promotion workflow marks the release as no longer a pre-release.
+
+If step 4 fails, do not run step 5. A fix goes out as a new candidate release with a new tag.
 
 ## 18. Testing
 
@@ -649,10 +805,10 @@ Releases (decided 2026-09-28):
 - REQ-TST-2: The shim tests MUST run in `php-cli` 8.3 against the webgui source of each tested build. Unraid 7.2 ships PHP 8.3 (release notes 7.2.5 and 7.2.7), and no release note of Unraid 7.3 changes that version.
 - REQ-TST-3: The shim tests MUST cover template round trips, validation, the policy, and the commands from `xmlToCommand`.
 - REQ-TST-4: The shim tests MUST run each generated `docker create` on the Docker of the test runner, with a stand-in image. The shim tests MUST compare the output of `docker inspect` with the definition.
-- REQ-TST-5: The shim tests MUST NOT start a container.
+- REQ-TST-5: The shim tests MUST NOT start a container, except the tests of the start check, which start throwaway containers of a stand-in image.
 - REQ-TST-6: The API module tests MUST run the real shim, and MUST NOT use mocks.
 - REQ-TST-7: The provider tests MUST run against a test server that serves the schema of section 15. The test server MUST use the real API module service and the real shim, on the Docker of the test runner.
-- REQ-TST-8: Before each release, a person MUST run the end-to-end procedure of this section on a server.
+- REQ-TST-8: Before a maintainer promotes a candidate release, a person MUST run the end-to-end procedure of this section on a server with that candidate release installed, and with the newest provider release (changed 2026-10-04 with the candidate releases of section 17).
 - REQ-TST-9: The provider tests MUST run the `tofu` binary of one pinned OpenTofu release (spike 4).
 - REQ-TST-10: The shim tests MUST load the webgui from `/usr/local/emhttp` and the plugin from `/usr/local/emhttp/plugins/tofuman`, as a server does.
 - REQ-TST-11: The PHP configuration of the shim tests MUST prepend `local_prepend.php` of the webgui to every run, as the PHP configuration of Unraid does. Reason: without REQ-TST-10 and REQ-TST-11, a tested build misses files that the shim loads on a server (spike 2).
@@ -666,12 +822,14 @@ End-to-end procedure. Preconditions: the plugin is installed on the server, an A
 5. Run `tofu plan`. The plan shows the change of the variable as drift.
 6. Run `tofu apply`. The variable returns to the value in the HCL file.
 7. Change the name in the HCL file, and run `tofu apply`. The tab shows the same managed ID under the new name.
-8. Run `tofu destroy`. The container and its template are gone.
-9. Create a throwaway hand-made container in the webgui, and select **Adopt** for it in the tab.
-10. Run `tofu import` with the name of that container, and write matching HCL. `tofu plan` shows no change.
-11. Check that the audit log shows each mutation and the adoption.
+8. Add an `ExtraParams` flag that tofuman does not know to the HCL file, and run `tofu plan`. The plan fails and names the flag. Remove the flag again.
+9. Give the container a command that exits at once, and run `tofu apply`. The apply fails at the step `start check` and shows the log lines of the container. The previous container runs again. Put the command back.
+10. Run `tofu destroy`. The container and its template are gone.
+11. Create a throwaway hand-made container in the webgui, and select **Adopt** for it in the tab.
+12. Run `tofu import` with the name of that container, and write matching HCL. `tofu plan` shows no change.
+13. Check that the audit log shows each mutation and the adoption, and that the tab shows the operation of step 9 with its log lines.
 
-If a step fails, keep the throwaway containers, copy the audit log, and do not release.
+If a step fails, keep the throwaway containers, download the diagnostics file from the tab, and do not promote the candidate release.
 
 The PowerShell 7 script `sources/provider/e2e/e2e.ps1` runs the tofu steps of this procedure, checks the outcome of each step, and waits for the steps in the webgui. A person runs it with the API key in the environment, so the key never reaches an agent.
 
@@ -679,7 +837,7 @@ The PowerShell 7 script `sources/provider/e2e/e2e.ps1` runs the tofu steps of th
 
 - Spike 1, 2026-09-28, **go** ([`spikes/2026-09-28-dockerman-helpers-off-unraid`](../spikes/2026-09-28-dockerman-helpers-off-unraid/README.md)): the DockerMan helpers load in `php-cli` with `_var()` and four globals stubbed. 17 of 17 real templates are a fixed point of `xmlToVar`, `postToXML`, `xmlToVar`. 16 of 17 generated commands created a matching container on a plain Docker host, and the 17th needs the nvidia runtime.
 - Spike 2, 2026-10-04, **go** on Unraid 7.3.2: the install route of REQ-PKG-10 to REQ-PKG-14 meets REQ-PKG-2. The update half of REQ-PKG-3 stays open until NewIntersect takes the next Unraid release. A person ran the spike on NewIntersect, with a written rollback (decided 2026-09-28). unraid-api loaded the API module after the install, after a restart, and after a reboot. There, `vendor_archive.json` names an archive that does not exist, so no start restores `node_modules`. Read in the code 2026-09-28: the load conditions and the restore at each start of section 17, and a plugin that fails to import leaves unraid-api running and raises an alert notification. The first runs found two defects, and plugin releases 2026.10.02 and 2026.10.03 fixed them. The tested build failed as a set, because the shim counted its own files and `local_prepend.php` (REQ-TST-10, REQ-TST-11), while every webgui file matched the tag `7.3.2` byte for byte. The first `createContainer` failed with "Bad Request Exception", because the global `ValidationPipe` of unraid-api rejected each field of the input class (section 23). With plugin 2026.10.03 and provider 0.1.0, the end-to-end procedure of section 18 passed on 2026-10-04.
-- Spike 3, open: find out whether a stylesheet with `:has()` on `input.autostart[container=NAME]` can mark managed containers in the stock container table (deferred, section 21).
+- Spike 3, 2026-10-04, **go**: a stylesheet can mark managed containers on the **Docker** page without JavaScript. The webgui renders the content of every tab of a page into that page, so a `<link>` in the tab reaches the stock container table, and each row of that table names its container only in the `container` attribute of its autostart switch. The rule `#docker_list tr:has(input.autostart[container="NAME"]) span.appname::after` puts the badge after the name, where it covers no control. The endpoint of the tab serves that stylesheet from the registry. `tests/preview/router.php` shows the badge on a stand-in table with the markup of `DockerContainers.php` at the tag `7.3.2` (path `/docker`); a server shows the real one.
 - Spike 4, 2026-09-28, **go** ([`spikes/2026-09-28-plugin-testing-on-opentofu`](../spikes/2026-09-28-plugin-testing-on-opentofu/README.md)): terraform-plugin-testing runs OpenTofu 1.12.6 through a create, an import by name, an update in place, and a read that drops a vanished resource. The run needs `TF_ACC_PROVIDER_HOST=registry.opentofu.org` and `TF_ACC_PROVIDER_NAMESPACE`, and without them `tofu init` fails.
 
 ## 20. Open items
@@ -691,13 +849,13 @@ The PowerShell 7 script `sources/provider/e2e/e2e.ps1` runs the tofu steps of th
 - Whether the free text that `configureUps` writes reaches command execution is untraced.
 - Whether the webgui **Update** action works on a container with a digest is untested.
 - How the provider reaches OpenTofu before a registry lists it is undecided. Assumption: a local filesystem mirror, filled from the assets of a GitHub release.
+- Research 2026-10-04: webgui `7.4.0-beta.3` adds the elements `Memory` and `ExtraNetworks` to `postToXML` and to `xmlToVar`, and `xmlToCommand` turns `Memory` into `--memory`. A tested build for 7.4 needs the shim to model both elements, or to refuse a template that sets either of them.
 
 ## 21. Deferred
 
-- A listing in Community Applications and in an OpenTofu provider registry. Both wait until tofuman survives an Unraid upgrade or two.
+- A listing in Community Applications and in an OpenTofu provider registry. Both wait until tofuman survives an Unraid upgrade or two. Research 2026-10-04: registry.opentofu.org lists a provider only from a public repository named `terraform-provider-<name>` with tags `vX.Y.Z`, and `tofu init` fails when a release lacks `SHA256SUMS.sig`. The smallest route is a repository `terraform-provider-tofuman` that holds only the signed releases, which the release workflow of this repository fills.
 - The start order of autostart containers and the wait values.
 - Tailscale and `<ExtraNetworks>`.
-- A badge on managed containers in the stock container table, after spike 3.
 
 ## 22. License
 
@@ -718,6 +876,7 @@ Read 2026-09-27 and 2026-09-28, pinned. unraid/webgui at tag `7.3.2` ([`369f0b2`
 - `$driver` comes from `DockerUtil::driver()` at the file scope of DockerClient.php ([L38-39](https://github.com/unraid/webgui/blob/369f0b2994584a6b6c8e6e570f5f86401d289234/emhttp/plugins/dynamix.docker.manager/include/DockerClient.php#L38-L39)), so the shim requires that file at its top level. `update_container` sets up `$var`, `$subnet`, and the other globals ([L15-32](https://github.com/unraid/webgui/blob/369f0b2994584a6b6c8e6e570f5f86401d289234/emhttp/plugins/dynamix.docker.manager/scripts/update_container#L15-L32)), and starts a recreated container only if the old container ran ([L169-181](https://github.com/unraid/webgui/blob/369f0b2994584a6b6c8e6e570f5f86401d289234/emhttp/plugins/dynamix.docker.manager/scripts/update_container#L169-L181)). `rebuild_container` never sets `$var` ([L22-34](https://github.com/unraid/webgui/blob/369f0b2994584a6b6c8e6e570f5f86401d289234/emhttp/plugins/dynamix.docker.manager/scripts/rebuild_container#L22-L34)).
 - The autostart file has one line per container, `name` or `name wait` ([UpdateConfig.php L22-55](https://github.com/unraid/webgui/blob/369f0b2994584a6b6c8e6e570f5f86401d289234/emhttp/plugins/dynamix.docker.manager/include/UpdateConfig.php#L22-L55)).
 - DockerMan's image parser splits a digest reference into repository `name@sha256` and tag `<hex>` ([DockerClient.php L1138-1170](https://github.com/unraid/webgui/blob/369f0b2994584a6b6c8e6e570f5f86401d289234/emhttp/plugins/dynamix.docker.manager/include/DockerClient.php#L1138-L1170)).
+- `getAllInfo` records the shared default icon for a container without an icon ([DockerClient.php L346](https://github.com/unraid/webgui/blob/369f0b2994584a6b6c8e6e570f5f86401d289234/emhttp/plugins/dynamix.docker.manager/include/DockerClient.php#L346)), and `removeContainer` with a cache level of 1 or more deletes the recorded icon ([L900-906](https://github.com/unraid/webgui/blob/369f0b2994584a6b6c8e6e570f5f86401d289234/emhttp/plugins/dynamix.docker.manager/include/DockerClient.php#L900-L906)). The webgui skips the shared icon from [`ff8f6e8`](https://github.com/unraid/webgui/commit/ff8f6e8db9) on (read 2026-10-04).
 - The nginx location for `/graphql` sets no proxy timeout ([rc.nginx L427-438](https://github.com/unraid/webgui/blob/369f0b2994584a6b6c8e6e570f5f86401d289234/etc/rc.d/rc.nginx#L427-L438)), so the nginx default of 60 seconds applies.
 - `unraid-api plugins install` runs `npm i --save-peer --save-exact` in the unraid-api directory ([plugin-management.service.ts L88-96](https://github.com/unraid/api/blob/a9625ae20a589e739926923b28ca7efe14233372/api/src/unraid-api/plugin/plugin-management.service.ts#L88-L96)), and each start of unraid-api replaces `node_modules` from the archive, if an archive exists ([dependencies.sh L129-152](https://github.com/unraid/api/blob/a9625ae20a589e739926923b28ca7efe14233372/plugin/source/dynamix.unraid.net/usr/local/share/dynamix.unraid.net/scripts/dependencies.sh#L129-L152)).
 - The shared decorator rejects resources outside the fixed list ([use-permissions.directive.ts L93-97](https://github.com/unraid/api/blob/d0615255e0ce062f7a8262e560f963d07f311539/packages/unraid-shared/src/use-permissions.directive.ts#L93-L97)). API 4.35.1 registers nest-authz's `AuthZGuard` ([app.module.ts L63-72](https://github.com/unraid/api/blob/a9625ae20a589e739926923b28ca7efe14233372/api/src/unraid-api/app/app.module.ts#L63-L72)), which lets through each handler without permission metadata ([authz.guard.ts L37-39](https://github.com/apache/casbin-nest-authz/blob/8cb1097dff90e4585670db49fcec74bc69ad982b/src/authz.guard.ts#L37-L39)). API 4.37.4 denies such handlers ([3ec4764](https://github.com/unraid/api/commit/3ec47647879a02bd45d55ca0e2bca987b1ff0d27)).
