@@ -20,6 +20,11 @@ import (
 // adoptionTemplate is where the plugin installs the adoption test template (REQ-TAB-42).
 const adoptionTemplate = "/usr/local/emhttp/plugins/tofuman/templates/tofuman-adoption-test.xml"
 
+// testIcon is the icon of the throwaway container, the one of the adoption test template too. On
+// webgui 7.3.2, removing a container without an icon deletes the default icon of DockerMan, and
+// an open Docker page then asks for it in a loop (REQ-E2E-20).
+const testIcon = "https://raw.githubusercontent.com/tomzorz/tofuman/main/sources/plugin/templates/tofuman-test-icon.png"
+
 // options are what a run needs besides the person.
 type options struct {
 	config          Config
@@ -408,6 +413,7 @@ resource "tofuman_container" "e2e" {
   autostart    = true
   extra_params = var.extra_params
   post_args    = var.command
+  icon         = %q
 
   path {
     host_path      = %q
@@ -434,7 +440,7 @@ resource "tofuman_container" "e2e" {
 output "id" {
   value = tofuman_container.e2e.id
 }
-`, p.first, p.opts.config.dataPath(), p.opts.config.port())
+`, p.first, testIcon, p.opts.config.dataPath(), p.opts.config.port())
 	if err := os.WriteFile(filepath.Join(p.opts.run, "providers.tf"), []byte(providers), 0o644); err != nil {
 		return err
 	}

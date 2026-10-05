@@ -32,7 +32,8 @@ function test_the_plg_file_parses_like_the_plugin_manager_reads_it(): void {
   same($releases[0], (string)$xml->attributes()->min, 'min is the oldest Unraid release with a tested build');
 }
 
-function test_the_api_module_goes_into_unraid_api_and_out_again(): void {
+/** A stand-in for unraid-api on a server: its package.json, node_modules, and api.json. */
+function unraid_api_layout(): string {
   $dir = sys_get_temp_dir() . '/tofumantest-package-' . bin2hex(random_bytes(4));
   mkdir("$dir/plugin/api/dist", 0755, true);
   file_put_contents("$dir/plugin/api/package.json", json_encode(['name' => 'unraid-api-plugin-tofuman', 'version' => '2026.09.28']));
@@ -40,17 +41,51 @@ function test_the_api_module_goes_into_unraid_api_and_out_again(): void {
   mkdir("$dir/unraid-api/node_modules/@unraid/shared", 0755, true);
   file_put_contents("$dir/unraid-api/package.json", '{"name": "unraid-api", "peerDependencies": {"unraid-api-plugin-connect": "workspace:*"}, "engines": {}}');
   file_put_contents("$dir/api.json", '{"version": "4.35.1", "extraOrigins": [], "sandbox": false, "ssoSubIds": [], "plugins": ["unraid-api-plugin-connect"]}');
+  return $dir;
+}
+
+/** Runs api-module.php against the layout in $dir, and returns its exit code and output. */
+function api_module(string $dir, array $environment, string ...$args): array {
+  $environment = $environment + getenv() + [
+    'TOFUMAN_PLUGIN_DIR' => "$dir/plugin",
+    'TOFUMAN_API_DIR' => "$dir/unraid-api",
+    'TOFUMAN_API_CONFIG' => "$dir/api.json",
+    'TOFUMAN_VENDOR_CONFIG' => "$dir/no-vendor-archive.json",
+    'TOFUMAN_DATA_DIR' => $dir,
+  ];
+  $process = proc_open(['php', dirname(__DIR__) . '/scripts/api-module.php', ...$args], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, null, $environment);
+  $output = stream_get_contents($pipes[1]) . stream_get_contents($pipes[2]);
+  return [proc_close($process), $output];
+}
+
+/** REQ-PKG-29: a restart of unraid-api that never ends holds up the install for the limit only. */
+function test_the_install_goes_on_when_the_restart_of_unraid_api_hangs(): void {
+  $dir = unraid_api_layout();
+  // a process named emhttpd, so that the script restarts unraid-api as it does on a running server
+  copy('/bin/sleep', "$dir/emhttpd");
+  copy(fixture('rc.unraid-api-hangs'), "$dir/rc.unraid-api");
+  chmod("$dir/emhttpd", 0755);
+  chmod("$dir/rc.unraid-api", 0755);
+  $emhttpd = proc_open(["$dir/emhttpd", '600'], [], $pipes);
+  try {
+    $started = microtime(true);
+    [$code, $output] = api_module($dir, ['TOFUMAN_RC_UNRAID_API' => "$dir/rc.unraid-api", 'TOFUMAN_RESTART_LIMIT' => '2'], 'install', '2026.09.28');
+    $took = microtime(true) - $started;
+    same(0, $code, "the install: $output");
+    check(str_contains($output, 'unraid-api did not restart within 2 seconds'), "the install does not say that the restart timed out: $output");
+    check(str_contains($output, 'the API module 2026.09.28 is in unraid-api'), "the install did not finish: $output");
+    check($took < 20, "the install waited $took seconds for a restart limited to 2");
+  } finally {
+    proc_terminate($emhttpd);
+    proc_close($emhttpd);
+  }
+}
+
+function test_the_api_module_goes_into_unraid_api_and_out_again(): void {
+  $dir = unraid_api_layout();
   $script = function (string ...$args) use ($dir): void {
-    $environment = getenv() + [
-      'TOFUMAN_PLUGIN_DIR' => "$dir/plugin",
-      'TOFUMAN_API_DIR' => "$dir/unraid-api",
-      'TOFUMAN_API_CONFIG' => "$dir/api.json",
-      'TOFUMAN_VENDOR_CONFIG' => "$dir/no-vendor-archive.json",
-      'TOFUMAN_DATA_DIR' => $dir,
-    ];
-    $process = proc_open(['php', dirname(__DIR__) . '/scripts/api-module.php', ...$args], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, null, $environment);
-    $output = stream_get_contents($pipes[1]) . stream_get_contents($pipes[2]);
-    same(0, proc_close($process), 'api-module.php ' . implode(' ', $args) . ": $output");
+    [$code, $output] = api_module($dir, [], ...$args);
+    same(0, $code, 'api-module.php ' . implode(' ', $args) . ": $output");
   };
   $package = fn() => json_decode((string)file_get_contents("$dir/unraid-api/package.json"), true);
   $plugins = fn() => json_decode((string)file_get_contents("$dir/api.json"), true)['plugins'];

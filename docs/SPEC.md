@@ -431,7 +431,7 @@ The first end-to-end run with the reworked tab changed its layout (decided 2026-
 - REQ-TAB-40: The tab MUST mark each line of the audit log that names an operation, and MUST highlight the line whose operation it shows (REQ-TAB-30).
 - REQ-TAB-41: When a pointer rests on the operation of REQ-TAB-30 or on the `import` block of one managed container, the tab MUST NOT highlight it. Reason: neither reacts to a click.
 - REQ-TAB-42: The hand-made section MUST link to the **Add Container** page of the webgui with the adoption test template filled in. The plugin MUST NOT put the adoption test template into the user templates of DockerMan. Reason: the template list of a person stays as that person left it.
-- REQ-TAB-43: The adoption test template MUST name the image `busybox:latest`, the network `bridge`, a command that keeps the container running, one variable, and one label, and MUST NOT name a host path.
+- REQ-TAB-43: The adoption test template MUST name the image `busybox:latest`, the network `bridge`, a command that keeps the container running, one variable, one label, and an icon of its own, and MUST NOT name a host path. Reason for the icon: on webgui 7.3.2, the removal of a container without an icon deletes the default icon of DockerMan (REQ-MUT-26), and an open **Docker** page then requests that icon in a loop, whose errors filled `/var/log` on a server on 2026-10-05.
 
 ### 13.1 The badge
 
@@ -785,6 +785,7 @@ How an API module stays installed across a reboot is undocumented. unraid-api lo
 - REQ-PKG-13: If the vendor archive lacks the current version of the API module, the install script MUST rebuild the vendor archive with `rc.unraid-api archive-dependencies`. Reason: each start of unraid-api replaces `node_modules` from the vendor archive.
 - REQ-PKG-14: If unraid-api runs while the install script runs, the install script MUST restart unraid-api.
 - REQ-PKG-15: When unraid-api loads the API module, the API module MUST write its version and the process ID of unraid-api to `/var/run/tofuman-api.json`. The tab MUST read that file for REQ-PKG-3.
+- REQ-PKG-29: The install script MUST give the restart of REQ-PKG-14 at most 2 minutes. When the restart takes longer, the install script MUST end the restart and each process that the restart started in its process group. The install script MUST then finish the install, and MUST say that unraid-api did not restart. Reason: on 2026-10-05, a full `/var/log` left PM2 unable to start, and the install waited for hours (added 2026-10-05).
 
 Releases (decided 2026-09-28):
 
@@ -836,7 +837,7 @@ If step 4 fails, do not run step 5. A fix goes out as a new candidate release wi
 
 End-to-end procedure. Preconditions: the plugin is installed on the server, an API key with only `DOCKER:CREATE_ANY` is on the key allowlist, and a directory for throwaway containers exists under a bind root.
 
-1. Write an HCL file with one throwaway container that uses a path, a port, a variable, a secret, and a label.
+1. Write an HCL file with one throwaway container that uses a path, a port, a variable, a secret, a label, and an icon of its own.
 2. Run `tofu apply`.
 3. In the webgui, check that the container runs, offers **Edit**, shows an update status, and carries the badge. The update status is where **Update** appears when a newer image exists.
 4. In the webgui, change the variable with **Edit**, and select **Apply**.
@@ -875,6 +876,7 @@ The e2e tool runs this procedure (decided 2026-10-05). A person runs it in that 
 - REQ-E2E-17: The e2e tool MUST write a summary file into the folder of the run, with the versions, each step, its times, and its result.
 - REQ-E2E-18: When its output is not a terminal, the e2e tool MUST print one line per event and read the answers of the person from its input. Reason: a run inside a log or a test has no terminal.
 - REQ-E2E-19: After the last step, the e2e tool MUST offer to delete the adopted container through `tofu destroy`.
+- REQ-E2E-20: The throwaway container of the e2e tool MUST have an icon of its own. Reason: REQ-TAB-43.
 
 ## 19. Spikes
 

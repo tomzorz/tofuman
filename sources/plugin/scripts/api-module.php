@@ -23,6 +23,7 @@ $paths = [
   'config' => getenv('TOFUMAN_API_CONFIG') ?: '/boot/config/plugins/dynamix.my.servers/configs/api.json',
   'vendor' => getenv('TOFUMAN_VENDOR_CONFIG') ?: '/usr/local/share/dynamix.unraid.net/config/vendor_archive.json',
   'scripts' => '/usr/local/share/dynamix.unraid.net/scripts',
+  'rc' => getenv('TOFUMAN_RC_UNRAID_API') ?: '/etc/rc.d/rc.unraid-api',
   'stamp' => (getenv('TOFUMAN_DATA_DIR') ?: '/boot/config/plugins/tofuman') . '/vendor-archive.json',
 ];
 
@@ -143,14 +144,36 @@ function rearchive(array $paths, callable $change, ?string $version): void {
   }
 }
 
-/** REQ-PKG-14. At boot, rc.local installs the plugins before emhttpd starts unraid-api. */
-function restart_if_running(): void {
-  exec('pgrep -x emhttpd', $output, $code);
-  if ($code !== 0) {
+/** REQ-PKG-29: how long a restart of unraid-api may take before the install goes on without it. */
+const RESTART_LIMIT = 120;
+
+function emhttpd_runs(): bool {
+  foreach (glob('/proc/[0-9]*/comm') ?: [] as $comm) {
+    if (trim((string)@file_get_contents($comm)) === 'emhttpd') {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * REQ-PKG-14 and REQ-PKG-29. At boot, rc.local installs the plugins before emhttpd starts
+ * unraid-api. passthru waits until the output of the restart closes, and a stuck child of the
+ * restart holds it open; timeout signals its whole process group, so that child ends with it.
+ */
+function restart_if_running(array $paths): void {
+  if (!emhttpd_runs()) {
     say('emhttpd does not run yet, so unraid-api starts later with the API module');
     return;
   }
-  run('/etc/rc.d/rc.unraid-api restart') || say('restarting unraid-api failed; the tofuman tab shows whether it loaded the API module');
+  $limit = (int)(getenv('TOFUMAN_RESTART_LIMIT') ?: RESTART_LIMIT);
+  say("running {$paths['rc']} restart, for at most $limit seconds");
+  passthru(sprintf('timeout --kill-after=10 %d %s restart', $limit, escapeshellarg($paths['rc'])), $code);
+  if ($code === 124 || $code === 137) {
+    say("unraid-api did not restart within $limit seconds. The plugin is installed; restart unraid-api with {$paths['rc']} restart, and the tofuman tab shows whether it loaded the API module");
+  } elseif ($code !== 0) {
+    say('restarting unraid-api failed; the tofuman tab shows whether it loaded the API module');
+  }
 }
 
 $action = $argv[1] ?? '';
@@ -165,7 +188,7 @@ try {
       rearchive($paths, fn() => copy_module($paths), $version);
       patch_package($paths, $version);
       patch_config($paths, true);
-      restart_if_running();
+      restart_if_running($paths);
       say("the API module $version is in unraid-api");
       break;
     case 'remove':
@@ -174,7 +197,7 @@ try {
         patch_package($paths, null);
         rearchive($paths, fn() => remove_tree("{$paths['api']}/node_modules/" . MODULE), null);
       }
-      restart_if_running();
+      restart_if_running($paths);
       say('the API module is out of unraid-api');
       break;
     default:

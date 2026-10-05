@@ -122,3 +122,7 @@ go.mod !filter !diff !merge text
 # Files that run on Linux keep LF, even under core.autocrlf=true on Windows
 *.sh text eol=lf
 Dockerfile text eol=lf
+
+# The icon of the test containers stays out of LFS: DockerMan downloads it from its raw GitHub
+# URL, which serves the pointer of an LFS file, and the package ships it as it is in the checkout
+sources/plugin/templates/*.png !filter !diff !merge -text

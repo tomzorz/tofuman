@@ -1,0 +1,9 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# A stand-in for /etc/rc.d/rc.unraid-api whose restart never ends, as when a full /var/log left
+# PM2 unable to start a daemon: it prints the first line of the real one, and a child holds the
+# output open, which is what kept the install of the plugin waiting (REQ-PKG-29).
+echo "Stopping Unraid API service..."
+sleep 600 &
+wait

@@ -198,6 +198,8 @@ function test_the_adoption_test_template_adopts_without_a_refusal(): void {
   $view = $operations->adopt('tofumantest-adoption', caller(true));
   $d = $view['definition'];
   same(['busybox:latest', 'bridge', ['tail', '-f', '/dev/null']], [$d['repository'], $d['network'], $d['postArgs']]);
+  same('https://raw.githubusercontent.com/tomzorz/tofuman/main/sources/plugin/templates/tofuman-test-icon.png', $d['icon'], 'an icon of its own');
+  check(is_file(dirname(__DIR__) . '/templates/tofuman-test-icon.png'), 'the icon that the template names is not in the repository');
   same(['VARIABLE GREETING', 'LABEL com.example.purpose'], array_map(fn(array $e) => "{$e['type']} {$e['target']}", $d['configEntries']), 'one variable, one label, no host path');
 }
 

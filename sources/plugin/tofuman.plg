@@ -16,6 +16,10 @@
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" support="https://github.com/&github;/issues" icon="code" launch="Docker" min="7.3.2">
 
 <CHANGES>
+### 2026.10.05b
+- An install no longer waits forever on a restart of unraid-api that hangs. After 2 minutes it finishes, and says that unraid-api did not restart and how to restart it.
+- tofuman-adoption-test has an icon of its own. On Unraid 7.3.2, removing a container without an icon deletes the Docker page's default icon, and an open Docker page then asks for it in a loop.
+
 ### 2026.10.05a
 - Hand-made containers links to Add Container with a ready template, tofuman-adoption-test: busybox on bridge with one variable and one label, and no host path, to try Adopt on. It is also the container of step 11 of the end-to-end test; provider release 0.2.1 brings the new end-to-end tool, tofuman-e2e.
 
