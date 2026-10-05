@@ -96,7 +96,7 @@ Markdown="false"
 
   <details>
     <summary class="tofuman-heading"><i class="fa fa-chevron-right tofuman-chevron"></i><i class="fa fa-wrench"></i>Hand-made containers <span id="tofuman-hand-made-count" class="tofuman-count"></span></summary>
-    <p class="tofuman-note">Adopt records a container in the registry and writes the marker into its template, without a recreate. tofu can then import it by its name.</p>
+    <p class="tofuman-note">Adopt records a container in the registry and writes the marker into its template, without a recreate. tofu can then import it by its name. <a href="/Docker/AddContainer?xmlTemplate=user:/usr/local/emhttp/plugins/tofuman/templates/tofuman-adoption-test.xml" title="Add Container with the template tofuman-adoption-test filled in: busybox on bridge, one variable, one label, no host path">Create a throwaway container to try it on</a></p>
     <div class="TableContainer">
       <table class="unraid tofuman-table">
         <thead><tr><td><input type="checkbox" id="tofuman-select-all" title="Select every container that is ready to adopt"></td><td>Container</td><td>Image</td><td>Adoption</td></tr></thead>

@@ -6,4 +6,8 @@ Thumbs.db.meta
 *.DS_Store
 *.directory
 
-# Add your custom repo-wide rules below: 
+# Add your custom repo-wide rules below:
+
+# The configuration of the e2e tool, which can hold an API key, and its run folders (REQ-E2E-6)
+tofuman-e2e.json
+tofuman-e2e-runs/ 

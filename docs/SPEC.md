@@ -146,6 +146,14 @@ Do not use: support bundle, dump, report.
 The mark that the plugin adds beside the name of each managed container on the **Docker** page of the webgui.
 Do not use: tag, label (Docker uses that name), icon.
 
+### e2e tool (noun)
+The program `tofuman-e2e`, which runs the end-to-end procedure of section 18 against one server and asks a person for the steps in the webgui.
+Do not use: e2e script, test runner, harness.
+
+### adoption test template (noun)
+The template `tofuman-adoption-test.xml` that the plugin ships, from which a person creates the hand-made container of step 11 of the end-to-end procedure.
+Do not use: test template, sample template.
+
 ## 2. Scope
 
 tofuman lets OpenTofu declare containers on a server, and the containers stay ordinary DockerMan containers. The plugin writes templates and creates containers through the DockerMan helpers. The webgui actions **Edit** and **Update**, CA Auto Update, and Appdata Backup keep working on managed containers. A change that a person makes in the webgui shows up in `tofu plan` as drift.
@@ -422,6 +430,8 @@ The first end-to-end run with the reworked tab changed its layout (decided 2026-
 - REQ-TAB-39: The tab MUST wrap the changes and the error of each line of the audit log inside their cells. Each of the two cells MUST show at most three lines of text, and MUST show its full text when a pointer rests on it.
 - REQ-TAB-40: The tab MUST mark each line of the audit log that names an operation, and MUST highlight the line whose operation it shows (REQ-TAB-30).
 - REQ-TAB-41: When a pointer rests on the operation of REQ-TAB-30 or on the `import` block of one managed container, the tab MUST NOT highlight it. Reason: neither reacts to a click.
+- REQ-TAB-42: The hand-made section MUST link to the **Add Container** page of the webgui with the adoption test template filled in. The plugin MUST NOT put the adoption test template into the user templates of DockerMan. Reason: the template list of a person stays as that person left it.
+- REQ-TAB-43: The adoption test template MUST name the image `busybox:latest`, the network `bridge`, a command that keeps the container running, one variable, and one label, and MUST NOT name a host path.
 
 ### 13.1 The badge
 
@@ -768,6 +778,7 @@ How an API module stays installed across a reboot is undocumented. unraid-api lo
 - REQ-PKG-7: On removal, the `.plg` file MUST remove the API module from unraid-api.
 - REQ-PKG-8: On removal, the `.plg` file MUST keep the registry, the policy, the audit log, the templates, and the containers.
 - REQ-PKG-9: Each release MUST build the provider for `linux/amd64`, `linux/arm64`, `darwin/arm64`, and `windows/amd64`.
+- REQ-PKG-28: Each provider release MUST also build the e2e tool for the platforms of REQ-PKG-9, as one zip per platform beside the zips of the provider, with a SHA256SUMS file of its own (added 2026-10-05).
 - REQ-PKG-10: At each run, the install script of the `.plg` file MUST copy the API module into `node_modules` of unraid-api.
 - REQ-PKG-11: At each run, the install script MUST add the API module to the peer dependencies in `package.json` of unraid-api.
 - REQ-PKG-12: If the `plugins` list of `api.json` lacks the API module, the install script MUST add the API module to that list.
@@ -821,26 +832,49 @@ If step 4 fails, do not run step 5. A fix goes out as a new candidate release wi
 - REQ-TST-9: The provider tests MUST run the `tofu` binary of one pinned OpenTofu release (spike 4).
 - REQ-TST-10: The shim tests MUST load the webgui from `/usr/local/emhttp` and the plugin from `/usr/local/emhttp/plugins/tofuman`, as a server does.
 - REQ-TST-11: The PHP configuration of the shim tests MUST prepend `local_prepend.php` of the webgui to every run, as the PHP configuration of Unraid does. Reason: without REQ-TST-10 and REQ-TST-11, a tested build misses files that the shim loads on a server (spike 2).
+- REQ-TST-12: The provider tests MUST run the e2e tool against the test server of REQ-TST-7, with a scripted person in place of the person in the webgui. For that person, the test server MUST create and adopt a hand-made container from the adoption test template.
 
 End-to-end procedure. Preconditions: the plugin is installed on the server, an API key with only `DOCKER:CREATE_ANY` is on the key allowlist, and a directory for throwaway containers exists under a bind root.
 
 1. Write an HCL file with one throwaway container that uses a path, a port, a variable, a secret, and a label.
 2. Run `tofu apply`.
-3. In the webgui, check that the container runs, offers **Edit**, and shows an update status. The update status is where **Update** appears when a newer image exists.
+3. In the webgui, check that the container runs, offers **Edit**, shows an update status, and carries the badge. The update status is where **Update** appears when a newer image exists.
 4. In the webgui, change the variable with **Edit**, and select **Apply**.
 5. Run `tofu plan`. The plan shows the change of the variable as drift.
 6. Run `tofu apply`. The variable returns to the value in the HCL file.
-7. Change the name in the HCL file, and run `tofu apply`. The tab shows the same managed ID under the new name.
+7. Change the name in the HCL file, and run `tofu apply`. The server reports the same managed ID under the new name.
 8. Add an `ExtraParams` flag that tofuman does not know to the HCL file, and run `tofu plan`. The plan fails and names the flag. Remove the flag again.
 9. Give the container a command that exits at once, and run `tofu apply`. The apply fails at the step `start check` and shows the log lines of the container. The previous container runs again. Put the command back.
 10. Run `tofu destroy`. The container and its template are gone.
-11. Create a throwaway hand-made container in the webgui. In the tab, tick it in the hand-made section, and select **Adopt selected**.
+11. In the webgui, create a throwaway hand-made container from the adoption test template. In the tab, tick it in the hand-made section, and select **Adopt selected**.
 12. Run `tofu import` with the name of that container, and write matching HCL. `tofu plan` shows no change.
 13. Check that the audit log shows each mutation and the adoption, and that the tab shows the operation of step 9 with its log lines.
 
 If a step fails, keep the throwaway containers, download the diagnostics file from the tab, and do not promote the candidate release.
 
-The PowerShell 7 script `sources/provider/e2e/e2e.ps1` runs the tofu steps of this procedure, checks the outcome of each step, and waits for the steps in the webgui. A person runs it with the API key in the environment, so the key never reaches an agent.
+### 18.1 The e2e tool
+
+The e2e tool runs this procedure (decided 2026-10-05). A person runs it in that person's own environment, so the API key never reaches an agent. It lives at `sources/provider/cmd/tofuman-e2e`, in the module of the provider, and uses the API client of the provider.
+
+- REQ-E2E-1: The e2e tool MUST run the steps of the end-to-end procedure against one server, in their order.
+- REQ-E2E-2: The e2e tool MUST read its configuration from `tofuman-e2e.json` in the working directory if that file exists, and else from `tofuman/e2e.json` in the user configuration directory of the operating system.
+- REQ-E2E-3: When neither file exists, the e2e tool MUST ask for the endpoint, the source of the API key, and the bind root of the throwaway containers. It MUST save the answers in the location that the person picks from those two.
+- REQ-E2E-4: The source of the API key MUST be exactly one of these: a reference that the 1Password CLI resolves with `op read`, a command whose output is the key, an environment variable, or the key itself in the configuration file.
+- REQ-E2E-5: The e2e tool MUST NOT show the API key, and MUST NOT write the API key into a file other than the configuration file. It MUST give the API key to tofu only through the environment of the tofu process.
+- REQ-E2E-6: The repository MUST keep `tofuman-e2e.json` and the run folders of the e2e tool out of git.
+- REQ-E2E-7: The e2e tool MUST keep the files of each run in a new folder: under `tofuman-e2e-runs/` in the working directory when its configuration comes from there, and else under the user cache directory of the operating system.
+- REQ-E2E-8: Before the first step, the e2e tool MUST check that `tofu` runs, that the API answers with the API key, and that the API module would accept the throwaway container (query `check`). If a check fails, the e2e tool MUST stop and name each failed check.
+- REQ-E2E-9: Before the first step, the e2e tool MUST list each managed container that an earlier run left, and MUST offer to delete those containers.
+- REQ-E2E-10: The e2e tool MUST give tofu the provider release of its own version from a filesystem mirror, which it fills from the assets of that release. It MUST check each asset against the SHA256SUMS file of the release. A build without a version MUST use the newest provider release. A person MAY name a local provider binary instead.
+- REQ-E2E-11: The e2e tool MUST give the throwaway containers of each run a random suffix in their names.
+- REQ-E2E-12: In step 4 and step 11, the e2e tool MUST watch the API and go on by itself: in step 4 when the variable holds a new value, and in step 11 when a managed container appears that was not managed when the step began.
+- REQ-E2E-13: In step 3 and step 13, the e2e tool MUST ask the person to confirm what the person sees in the webgui.
+- REQ-E2E-14: The e2e tool MUST also check through the API what the procedure asks of the server: that the container runs (step 3), that the variable holds its value again (step 6), that the managed ID stays under the new name (step 7), that the previous container runs again (step 9), and that the container is gone (step 10).
+- REQ-E2E-15: The e2e tool MUST show each step with its state, the time when it began, and its duration.
+- REQ-E2E-16: When a step fails, the e2e tool MUST show the end of the output of tofu for that step, and MUST let the person retry the step or stop the run. When the run stops, the throwaway containers MUST stay.
+- REQ-E2E-17: The e2e tool MUST write a summary file into the folder of the run, with the versions, each step, its times, and its result.
+- REQ-E2E-18: When its output is not a terminal, the e2e tool MUST print one line per event and read the answers of the person from its input. Reason: a run inside a log or a test has no terminal.
+- REQ-E2E-19: After the last step, the e2e tool MUST offer to delete the adopted container through `tofu destroy`.
 
 ## 19. Spikes
 
@@ -863,6 +897,7 @@ The PowerShell 7 script `sources/provider/e2e/e2e.ps1` runs the tofu steps of th
 ## 21. Deferred
 
 - A listing in Community Applications and in an OpenTofu provider registry. Both wait until tofuman survives an Unraid upgrade or two. Research 2026-10-04: registry.opentofu.org lists a provider only from a public repository named `terraform-provider-<name>` with tags `vX.Y.Z`, and `tofu init` fails when a release lacks `SHA256SUMS.sig`. The smallest route is a repository `terraform-provider-tofuman` that holds only the signed releases, which the release workflow of this repository fills.
+- A server check in the tab (decided 2026-10-05, after the e2e tool): checks on the server, and a throwaway container through create, start check, and delete in the shim, without tofu and without the provider.
 - The start order of autostart containers and the wait values.
 - Tailscale and `<ExtraNetworks>`.
 

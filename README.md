@@ -91,10 +91,20 @@ The policy on the tab decides what a container may have: host paths under its bi
 
 The plugin refuses changes until a plugin release covers the new Unraid release, and an alert notification says so. Queries keep working, and the containers keep running. Updating the plugin lifts the refusal.
 
+## Check a server end to end
+
+`tofuman-e2e` runs the whole procedure of spec section 18 against your server. It creates a throwaway busybox container with tofu, lets you change it in the webgui and checks that tofu sees the drift, renames it, provokes a refusal at plan time and a failed start check, destroys it, and imports a container that you adopt in the tab. When a step needs you in the webgui, it says what to do and carries on by itself once the server shows the change.
+
+1. Download the `tofuman-e2e` zip for your platform from the latest `provider-v*` release, and unpack it. It needs `tofu` on PATH, and it fetches the matching provider into a cache of its own, so your mirror stays as it is.
+2. Run `tofuman-e2e`. The first run asks for the endpoint, where the API key comes from (the 1Password CLI, any command that prints it, an environment variable, or the key itself), and the bind root for the throwaway data. It saves the answers in your user config folder, or as `tofuman-e2e.json` in the current folder if you pick that; a file there wins over the one in your user folder. `tofuman-e2e -setup` asks again.
+3. Each run keeps a folder with `summary.txt` and the output of every tofu command. `-plain` prints one line per event instead of the interactive view.
+
+The throwaway containers are named `tofuman-e2e-<random>`, and a run offers to delete the ones that an earlier run left behind. For the adoption, the run links to Add Container with the `tofuman-adoption-test` template filled in; the Hand-made containers section of the tab has the same link.
+
 ## Repository
 
 - `sources/plugin/`: the plugin. The shim (PHP) calls the webgui's DockerMan helpers, the API module (TypeScript) loads into unraid-api, and the tab and the `.plg` file live next to them.
-- `sources/provider/`: the provider (Go).
+- `sources/provider/`: the provider (Go), and in `cmd/tofuman-e2e` the end-to-end tool.
 - `docs/SPEC.md`: the specification.
 
 ## License

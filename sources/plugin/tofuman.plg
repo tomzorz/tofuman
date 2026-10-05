@@ -16,6 +16,9 @@
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" support="https://github.com/&github;/issues" icon="code" launch="Docker" min="7.3.2">
 
 <CHANGES>
+### 2026.10.05a
+- Hand-made containers links to Add Container with a ready template, tofuman-adoption-test: busybox on bridge with one variable and one label, and no host path, to try Adopt on. It is also the container of step 11 of the end-to-end test; provider release 0.2.1 brings the new end-to-end tool, tofuman-e2e.
+
 ### 2026.10.05
 - Hand-made containers and Policy fold away and start closed. Their headings show the count, and Policy says how many entries it lacks.
 - Adopt selected and Import blocks for all sit below their tables, as on the Docker page, and the Adopt button of each row is gone.

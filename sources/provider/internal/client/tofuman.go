@@ -112,6 +112,17 @@ func (c *Client) ContainerNamed(ctx context.Context, name string) (*Container, e
 	return data.Tofuman.Container, err
 }
 
+// Containers returns every managed container.
+func (c *Client) Containers(ctx context.Context) ([]Container, error) {
+	var data struct {
+		Tofuman struct {
+			Containers []Container `json:"containers"`
+		} `json:"tofuman"`
+	}
+	err := c.do(ctx, `query { tofuman { containers { `+containerFields+` } } }`, nil, &data)
+	return data.Tofuman.Containers, err
+}
+
 // Check is TofumanCheck: the failed checks of a mutation that did not happen.
 type Check struct {
 	FailedChecks []string `json:"failedChecks"`

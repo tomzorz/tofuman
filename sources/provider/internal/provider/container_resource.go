@@ -323,7 +323,7 @@ func (r *containerResource) ImportState(ctx context.Context, req resource.Import
 	}
 	if container == nil {
 		resp.Diagnostics.AddError("No managed container named "+req.ID, fmt.Sprintf(
-			"tofuman manages no container named %q. If it is a hand-made container, select Adopt for it on the tofuman tab of the Docker page in the webgui, then import it again.", req.ID))
+			"tofuman manages no container named %q. If it is a hand-made container, adopt it on the tofuman tab of the Docker page in the webgui: open Hand-made containers, tick it, and select Adopt selected. Then import it again.", req.ID))
 		return
 	}
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), container.ID)...)

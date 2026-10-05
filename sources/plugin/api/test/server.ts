@@ -3,9 +3,11 @@
 // The test server of REQ-TST-7: the schema that the API module builds, served over HTTP, with the
 // real service and the real shim behind it. The provider tests run against it. It stands in for
 // unraid-api only as far as the provider can tell: POST /graphql, and one API key in the header
-// x-api-key. Start it through sources/plugin/ci/test.sh --server, which provides the shim, the
-// webgui source, and Docker.
+// x-api-key. POST /person/adopt-from-template?name=... does what a person in the webgui does in
+// step 11 of the end-to-end procedure, for the acceptance test of the e2e tool. Start it through
+// sources/plugin/ci/test.sh --server, which provides the shim, the webgui source, and Docker.
 
+import { spawn } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { tmpdir } from 'node:os';
@@ -19,6 +21,7 @@ import type { Caller } from '../src/shim.js';
 import { moduleSchema } from './schema.js';
 
 const PORT = 8931;
+const PERSON = '/usr/local/emhttp/plugins/tofuman/tests/fixtures/person.php';
 const API_KEY = process.env['TOFUMAN_TEST_API_KEY'] ?? '';
 const CALLER: Caller = { id: '11111111-1111-4111-8111-111111111111', name: 'provider-tests', admin: false, providerVersion: null };
 
@@ -123,17 +126,38 @@ function readBody(request: IncomingMessage): Promise<string> {
   });
 }
 
+/**
+ * REQ-TST-12: what the person in the webgui does in step 11 of the end-to-end procedure, for the
+ * acceptance test of the e2e tool: a hand-made container from the adoption test template, adopted.
+ */
+function adoptFromTemplate(name: string): Promise<{ ok: boolean; output: string }> {
+  return new Promise((resolve) => {
+    const child = spawn('php', [PERSON, name], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let output = '';
+    child.stdout.setEncoding('utf8').on('data', (chunk: string) => (output += chunk));
+    child.stderr.setEncoding('utf8').on('data', (chunk: string) => (output += chunk));
+    child.on('close', (code) => resolve({ ok: code === 0, output }));
+  });
+}
+
 async function handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
   if (request.method === 'GET' && request.url === '/health') {
     send(response, 200, { ok: true });
     return;
   }
-  if (request.method !== 'POST' || request.url !== '/graphql') {
+  const person = request.method === 'POST' && request.url?.startsWith('/person/adopt-from-template?name=');
+  if (!person && (request.method !== 'POST' || request.url !== '/graphql')) {
     send(response, 404, { errors: [{ message: `the test server has no route for ${request.method} ${request.url}` }] });
     return;
   }
   if (request.headers['x-api-key'] !== API_KEY) {
     send(response, 401, { errors: [{ message: 'API key validation failed', extensions: { code: 'UNAUTHENTICATED' } }] });
+    return;
+  }
+  if (person) {
+    const name = new URL(request.url ?? '', 'http://test').searchParams.get('name') ?? '';
+    const result = await adoptFromTemplate(name);
+    send(response, result.ok ? 200 : 500, result);
     return;
   }
   let payload: unknown;

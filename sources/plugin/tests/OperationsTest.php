@@ -188,6 +188,19 @@ function test_the_tab_lists_hand_made_containers_and_only_an_administrator_adopt
   same([], $operations->handMade(caller(true)), 'an adopted container is still offered for adoption');
 }
 
+/** REQ-TAB-42 and REQ-TAB-43: a container from the adoption test template adopts as it stands. */
+function test_the_adoption_test_template_adopts_without_a_refusal(): void {
+  $env = make_env();
+  write_policy($env);
+  $operations = new Operations($env);
+  from_adoption_test_template('tofumantest-adoption');
+  same([['tofumantest-adoption', []]], array_map(fn(array $c) => [$c['name'], $c['refusals']], $operations->handMade(caller(true))));
+  $view = $operations->adopt('tofumantest-adoption', caller(true));
+  $d = $view['definition'];
+  same(['busybox:latest', 'bridge', ['tail', '-f', '/dev/null']], [$d['repository'], $d['network'], $d['postArgs']]);
+  same(['VARIABLE GREETING', 'LABEL com.example.purpose'], array_map(fn(array $e) => "{$e['type']} {$e['target']}", $d['configEntries']), 'one variable, one label, no host path');
+}
+
 /** REQ-MUT-20 to REQ-MUT-22, REQ-FILE-4 to REQ-FILE-7: each operation leaves one masked line, and the audit names it. */
 function test_operations_leave_a_line_each(): void {
   $env = make_env();

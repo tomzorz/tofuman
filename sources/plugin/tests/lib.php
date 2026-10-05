@@ -179,6 +179,19 @@ function hand_made(string $fixture, string $container, bool $throughDockerMan = 
   }
 }
 
+/**
+ * Places the adoption test template that the plugin ships under the name $container, and
+ * creates its container, as Add Container does with the link of the tab (REQ-TAB-42).
+ */
+function from_adoption_test_template(string $container): void {
+  global $dockerManPaths;
+  @mkdir($dockerManPaths['templates-user'], 0755, true);
+  $xml = (string)file_get_contents(dirname(__DIR__) . '/templates/tofuman-adoption-test.xml');
+  file_put_contents(template_file($container), str_replace('<Name>tofuman-adoption-test</Name>', "<Name>$container</Name>", $xml));
+  [$command] = xmlToCommand(template_file($container), false);
+  Tofuman\Docker::run($command);
+}
+
 function last_audit(Env $env): array {
   $lines = (new Tofuman\Audit($env->auditFile()))->tail(1);
   check($lines !== [], 'the audit log is empty');
