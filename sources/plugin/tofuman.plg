@@ -4,8 +4,8 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name "tofuman">
 <!ENTITY author "tomzorz">
-<!ENTITY version "2026.10.04">
-<!ENTITY sha256 "8dc5a210ff0f2a5501d9311d329aebfabb3f75a6edda00dd9f700c31bca586a2">
+<!ENTITY version "2026.10.12">
+<!ENTITY sha256 "8d82be3a4f5f98242973d1ba7649d2e3e52f782a5a1220ce967628f9ba18118d">
 <!ENTITY github "tomzorz/tofuman">
 <!ENTITY pluginURL "https://raw.githubusercontent.com/&github;/main/sources/plugin/tofuman.plg">
 <!ENTITY package "&name;-&version;.tgz">
