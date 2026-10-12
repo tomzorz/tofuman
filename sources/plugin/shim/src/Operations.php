@@ -156,7 +156,8 @@ final class Operations {
         ];
         $log->step('template');
         $newPath = $new === $old ? $oldPath : Docker::templateWritePath($new);
-        $this->writeTemplate($newPath, Definition::toXml($d, $id));
+        $written = Definition::toXml($d, $id);
+        $this->writeTemplate($newPath, $written);
         try {
           if ($previous['running']) {
             $log->step('stop');
@@ -174,7 +175,7 @@ final class Operations {
             $this->startAndCheck($new, $log, self::startCheckSeconds($operation)); // REQ-DEF-7
           }
         } catch (Failure $failure) {
-          throw $this->restore($previous, $new, $newPath, $failure); // REQ-MUT-9
+          throw $this->restore($previous, $new, $newPath, $written, $failure); // REQ-MUT-9
         }
         $registry->record($id, $new, Definition::hash($d));
         $registry->save();
@@ -574,26 +575,50 @@ final class Operations {
     $this->autostart()->set($name, false);
   }
 
-  /** Puts the previous template and container back, and returns the failure to throw. */
-  private function restore(array $previous, string $new, string $newPath, Failure $failure): Failure {
+  /**
+   * Puts the previous template and container back, and returns the failure to throw. The
+   * template goes back first (REQ-MUT-9), unless another change, such as an edit in the
+   * webgui, wrote it after the update did (REQ-MUT-27). Either way the container follows the
+   * template, also when one of its steps here fails too.
+   */
+  private function restore(array $previous, string $new, string $newPath, string $written, Failure $failure): Failure {
+    $name = $previous['name'];
+    $other = false;
+    $template = false;
     try {
-      Docker::removeIfExists($new);
       if ($newPath !== $previous['path'] && is_file($newPath)) {
         unlink($newPath);
-        $this->autostart()->rename($new, $previous['name']);
+        $this->autostart()->rename($new, $name);
       }
-      $this->writeTemplate($previous['path'], $previous['xml']);
-      Docker::removeIfExists($previous['name']);
+      $current = is_file($previous['path']) ? file_get_contents($previous['path']) : false;
+      $other = is_string($current) && $current !== $written && $current !== $previous['xml'];
+      if (!$other) {
+        $this->writeTemplate($previous['path'], $previous['xml']);
+      }
+      $template = true;
+      Docker::removeIfExists($new);
+      Docker::removeIfExists($name);
       [$command] = \xmlToCommand($previous['path'], false);
       Docker::run($command);
-      $this->autostart()->set($previous['name'], $previous['autostart']);
+      $this->autostart()->set($name, $previous['autostart']);
       if ($previous['running']) {
-        Docker::start($previous['name']);
+        Docker::start($name);
       }
-      return new Failure($failure->step, "{$failure->getMessage()} The previous container {$previous['name']} is back.");
+      $back = $other ? "The template of $name changed during the operation, such as through an edit in the webgui, and $name is back as that template says." : "The previous container $name is back.";
+      return new Failure($failure->step, self::sentences($failure->getMessage(), $back));
     } catch (Failure $restoreFailure) {
-      return new Failure($failure->step, "{$failure->getMessage()} Putting back the previous container {$previous['name']} failed too: {$restoreFailure->getMessage()}");
+      $state = match (true) {
+        !$template => "Putting back the previous template of $name failed too",
+        $other => "The template of $name changed during the operation, such as through an edit in the webgui, and stays as that change wrote it, but putting back its container failed",
+        default => "The previous template of $name is back, but putting back its container failed",
+      };
+      return new Failure($failure->step, self::sentences($failure->getMessage(), "$state: {$restoreFailure->getMessage()}"));
     }
+  }
+
+  /** Ends the first text with a full stop before the second one follows. */
+  private static function sentences(string $first, string $then): string {
+    return rtrim($first, " \n.") . ". $then";
   }
 
   /** The actions of the tab, which the API module never offers. */

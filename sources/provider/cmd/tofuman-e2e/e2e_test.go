@@ -170,7 +170,13 @@ func (u *scriptedPerson) Update(s Step) {
 	}
 }
 
-func (u *scriptedPerson) Confirm(Step, []string) (bool, error) { return true, nil }
+// Confirm sees what the procedure describes, and in step 4 makes the edit first, to its end.
+func (u *scriptedPerson) Confirm(s Step, _ []string) (bool, error) {
+	if s.ID == "4" {
+		u.editGreeting()
+	}
+	return true, nil
+}
 
 // Ask deletes leftovers and the adopted container, and claims no container but its own.
 func (u *scriptedPerson) Ask(question string) (bool, error) {
@@ -183,10 +189,7 @@ func (u *scriptedPerson) Retry(s Step, tail []string) (bool, error) {
 }
 
 func (u *scriptedPerson) Await(s Step, _ []string, done <-chan struct{}) error {
-	switch s.ID {
-	case "4":
-		u.editGreeting()
-	case "11":
+	if s.ID == "11" {
 		u.adoptFromTemplate()
 	}
 	select {
@@ -206,7 +209,8 @@ func (u *scriptedPerson) client() *client.Client {
 	return c
 }
 
-// editGreeting changes GREETING around tofu, as Edit in the webgui does.
+// editGreeting changes GREETING around tofu, as Edit in the webgui has by the time its window
+// shows Done.
 func (u *scriptedPerson) editGreeting() {
 	ctx := context.Background()
 	c := u.client()

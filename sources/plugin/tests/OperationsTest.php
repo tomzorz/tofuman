@@ -265,6 +265,62 @@ function test_an_update_that_dies_at_its_start_puts_the_previous_back(): void {
   same($before['definition'], $operations->get($before['id'], null, caller())['definition']);
 }
 
+/**
+ * REQ-MUT-9 and REQ-MUT-28: an edit in the webgui removes the container while the stop of an
+ * update waits for it, as when a tofu apply follows an edit before the webgui has finished.
+ * The update fails at its removal and says why. Its template goes back before anything else,
+ * so the template and the container that the edit runs next agree.
+ */
+function test_an_update_that_meets_an_edit_in_the_webgui_leaves_the_edit_whole(): void {
+  $env = make_env();
+  write_policy($env);
+  $operations = new Operations($env);
+  $id = $operations->create(definition(['autostart' => true]), caller(), ['startCheck' => 0])['id'];
+  // sleep ignores SIGTERM, so the stop of the update waits; many files keep the removal of the edit busy long enough to meet
+  docker('exec tofumantest-a sh -c "mkdir /junk && cd /junk && seq 1 100000 | xargs touch"');
+  $original = (string)file_get_contents(template_file('tofumantest-a'));
+  $edited = str_replace('>Etc/UTC</Config>', '>Europe/Budapest</Config>', $original);
+  check($edited !== $original, 'the edit changes nothing');
+  file_put_contents(template_file('tofumantest-a'), $edited);
+  $edit = webgui_edit('remove', 'tofumantest-a');
+  try {
+    $failure = fails_at(fn() => $operations->update($id, definition(['autostart' => true]), caller(), ['startCheck' => 0]), 'remove');
+  } finally {
+    webgui_edit_done($edit); // so that the edit never reaches into the next test
+  }
+  same($edited, file_get_contents(template_file('tofumantest-a')), 'the template');
+  check(str_contains($failure->getMessage(), 'Docker is already removing it for another change') && str_contains($failure->getMessage(), 'The previous template of tofumantest-a is back'), "the failure does not say what happened: {$failure->getMessage()}");
+  $ct = inspect('tofumantest-a');
+  check(in_array('TZ=Europe/Budapest', $ct['Config']['Env'], true) && $ct['State']['Running'], 'the container of the edit does not run with its value');
+  $view = $operations->get($id, null, caller());
+  same(['Europe/Budapest', true], [array_column($view['definition']['configEntries'], 'value', 'target')['TZ'], $view['changedSinceLastMutation']], 'the server sees the edit as drift');
+}
+
+/**
+ * REQ-MUT-27: an edit in the webgui writes the template while the start check of an update
+ * runs, and the start check fails. The template of the edit stays, and the container follows it.
+ */
+function test_a_template_that_an_edit_writes_during_an_update_stays(): void {
+  $env = make_env();
+  write_policy($env);
+  $operations = new Operations($env);
+  $traps = ['sh', '-c', 'trap exit TERM; sleep 3600 & wait']; // stops at once, unlike a bare sleep
+  $id = $operations->create(definition(['autostart' => true, 'postArgs' => $traps]), caller(), ['startCheck' => 0])['id'];
+  $edited = sys_get_temp_dir() . '/tofumantest-edited-' . bin2hex(random_bytes(4)) . '.xml';
+  file_put_contents($edited, str_replace('>Etc/UTC</Config>', '>Europe/Budapest</Config>', (string)file_get_contents(template_file('tofumantest-a'))));
+  $edit = webgui_edit('rewrite', 'tofumantest-a', $edited);
+  try {
+    $failure = fails_at(fn() => $operations->update($id, definition(['autostart' => true, 'postArgs' => ['sh', '-c', 'sleep 2; exit 5']]), caller(), ['startCheck' => 10]), 'start check');
+  } finally {
+    webgui_edit_done($edit);
+  }
+  check(str_contains($failure->getMessage(), 'changed during the operation') && str_contains($failure->getMessage(), 'is back as that template says'), "the failure does not say that the template of the edit stays: {$failure->getMessage()}");
+  same(file_get_contents($edited), file_get_contents(template_file('tofumantest-a')), 'the template');
+  $ct = inspect('tofumantest-a');
+  same($traps, $ct['Config']['Cmd'], 'the command of the template');
+  check(in_array('TZ=Europe/Budapest', $ct['Config']['Env'], true) && $ct['State']['Running'], 'the container does not run as the template of the edit says');
+}
+
 /** REQ-MUT-17: a start check of 0 seconds lets a container that ends on its own pass. */
 function test_a_start_check_of_zero_is_skipped(): void {
   $env = make_env();

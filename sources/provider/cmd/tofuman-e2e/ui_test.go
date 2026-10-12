@@ -43,7 +43,7 @@ func TestPlainLinesAndAnswers(t *testing.T) {
 func TestTheViewAnswersWithTheKeyOfThePerson(t *testing.T) {
 	stopped := false
 	var m tea.Model = newModel(func() { stopped = true })
-	m, _ = m.Update(stepsMsg{{ID: "3", Title: "Look in the webgui"}, {ID: "4", Title: "Edit in the webgui"}})
+	m, _ = m.Update(stepsMsg{{ID: "3", Title: "Look in the webgui"}, {ID: "11", Title: "Adopt in the tab"}})
 	m, _ = m.Update(stepMsg{ID: "3", Title: "Look in the webgui", State: stateWaiting, Began: time.Now(), Detail: "a look in the webgui"})
 	answers := make(chan reply, 1)
 	m, _ = m.Update(promptMsg{kind: confirmPrompt, step: Step{ID: "3", Title: "Look in the webgui"}, lines: []string{"• it runs"}, reply: answers})
@@ -57,7 +57,7 @@ func TestTheViewAnswersWithTheKeyOfThePerson(t *testing.T) {
 	if r := <-answers; !r.yes || r.err != nil {
 		t.Fatalf("y became %+v", r)
 	}
-	m, _ = m.Update(promptMsg{kind: awaitPrompt, step: Step{ID: "4", Title: "Edit in the webgui"}, reply: answers, since: time.Now()})
+	m, _ = m.Update(promptMsg{kind: awaitPrompt, step: Step{ID: "11", Title: "Adopt in the tab"}, reply: answers, since: time.Now()})
 	m, _ = m.Update(tea.KeyPressMsg{Code: 'q', Text: "q"})
 	if r := <-answers; r.err != errStopped || !stopped {
 		t.Fatalf("q became %+v, and the run stopped: %v", r, stopped)

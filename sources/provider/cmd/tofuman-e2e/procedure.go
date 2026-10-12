@@ -527,23 +527,36 @@ func (p *procedure) look(ctx context.Context, s *Step) (string, error) {
 	return "it runs, carries the badge, offers Edit, and shows an update status", nil
 }
 
-// edit is step 4.
+// edit is step 4. The person says when the webgui is done (REQ-E2E-13): DockerMan writes the
+// template before it replaces the container, so the server reports the new value while the
+// container still runs with the old one.
 func (p *procedure) edit(ctx context.Context, s *Step) (string, error) {
 	p.waiting(s, "your edit in the webgui")
-	value, err := p.watch(ctx, s, []string{
+	yes, err := p.ui.Confirm(*s, []string{
 		"On the Docker page, open the menu of " + p.first + " and select Edit.",
 		"Change GREETING to anything but hello, and select Apply.",
-		"The run goes on by itself when the server reports the new value.",
-	}, func(ctx context.Context) (string, bool, error) {
-		c, err := p.api.Container(ctx, p.id)
-		if err != nil || c == nil {
-			return "", false, err
-		}
-		value, present := variable(c, "GREETING")
-		return value, present && value != "hello", nil
+		"Wait until the window of the webgui shows Done; it replaces the container until then.",
 	})
 	if err != nil {
 		return "", err
+	}
+	if !yes {
+		return "", errors.New("the edit in the webgui did not finish")
+	}
+	p.running(s)
+	c, err := p.api.Container(ctx, p.id)
+	if err != nil {
+		return "", err
+	}
+	if c == nil {
+		return "", errors.New("the server no longer reports the container after the edit")
+	}
+	value, present := variable(c, "GREETING")
+	if !present {
+		return "", errors.New("the server reports no GREETING after the edit")
+	}
+	if value == "hello" {
+		return "", errors.New("the server still reports GREETING as hello")
 	}
 	return "GREETING is " + strconv.Quote(value) + " on the server", nil
 }

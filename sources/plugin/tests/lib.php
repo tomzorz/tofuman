@@ -192,6 +192,31 @@ function from_adoption_test_template(string $container): void {
   Tofuman\Docker::run($command);
 }
 
+/**
+ * Starts fixtures/webgui-edit.php beside the test, and waits until it has read the template.
+ *
+ * @return array{0: resource, 1: resource} the process and its output, for webgui_edit_done()
+ */
+function webgui_edit(string ...$args): array {
+  $process = proc_open(['php', fixture('webgui-edit.php'), ...$args], [1 => ['pipe', 'w'], 2 => ['redirect', 1]], $pipes);
+  check(is_resource($process), 'cannot start webgui-edit.php');
+  $line = (string)fgets($pipes[1]);
+  if ($line !== "ready\n") { // not check(): its message would read the output to its end first
+    throw new RuntimeException('webgui-edit.php did not get ready: ' . $line . stream_get_contents($pipes[1]));
+  }
+  return [$process, $pipes[1]];
+}
+
+/** Waits until the edit of webgui_edit() ends, and returns what it printed. */
+function webgui_edit_done(array $edit): string {
+  [$process, $output] = $edit;
+  $printed = (string)stream_get_contents($output);
+  fclose($output);
+  $code = proc_close($process);
+  check($code === 0, "webgui-edit.php ended with exit code $code: $printed");
+  return $printed;
+}
+
 function last_audit(Env $env): array {
   $lines = (new Tofuman\Audit($env->auditFile()))->tail(1);
   check($lines !== [], 'the audit log is empty');

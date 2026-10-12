@@ -131,11 +131,16 @@ final class Docker {
     }
   }
 
+  /**
+   * REQ-MUT-28. DockerClient words its text for HTTP 409 for an image. Asked to remove a
+   * container with force, Docker answers 409 only while another removal of that container runs.
+   */
   public static function remove(string $name): void {
     global $DockerClient;
     $result = $DockerClient->removeContainer($name, false, self::iconCacheLevel($name));
     if ($result !== true) {
-      throw new Failure('remove', "the removal of $name failed: $result");
+      $reason = $result === 'Image can not be deleted, in use by other container(s)' ? 'Docker is already removing it for another change, such as an edit in the webgui' : $result;
+      throw new Failure('remove', "the removal of $name failed: $reason");
     }
   }
 

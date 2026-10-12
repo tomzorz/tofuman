@@ -296,7 +296,7 @@ An operation for `createContainer` or `updateContainer` runs these steps in orde
 8. The API module updates the registry and appends a line to the audit log.
 
 - REQ-MUT-8: If step 1 or step 2 fails, the shim MUST leave the template and the old container unchanged.
-- REQ-MUT-9: If an update fails after step 3, the shim MUST restore the previous template and recreate the previous container from that template.
+- REQ-MUT-9: If an update fails after step 3, the shim MUST put the previous template back before the shim removes a container and before the shim creates a container. The shim MUST then recreate the container from the template. Reason: when a step of that recreation fails too, the template of the failed update otherwise stays behind (found 2026-10-12).
 - REQ-MUT-10: If a create fails after step 3, the shim MUST delete the new template and each container that the operation created.
 - REQ-MUT-11: For a rename, the shim MUST keep the managed ID, remove the old container and the old template, and create the container under the new name.
 - REQ-MUT-12: An operation for `deleteContainer` MUST do each of the following:
@@ -324,6 +324,11 @@ The operation log and the notifications, decided 2026-10-04 so that a person and
 - REQ-MUT-24: A failure to raise a notification MUST NOT change the result of the operation.
 - REQ-MUT-25: The query `check` MUST run the checks of REQ-MUT-2 without a mutation, and MUST NOT append a line to the audit log.
 - REQ-MUT-26: When the shim removes a container, the shim MUST NOT delete the default icon of DockerMan. Reason: the webgui at tag `7.3.2` records that shared icon for each container without an icon of its own, and `removeContainer` then deletes the recorded icon from RAM until the next boot (found 2026-10-04; the webgui guards that icon from tag `7.3.3-rc.1` on).
+
+An edit in the webgui writes the template first. It replaces the container only after the old container stops, up to the stop timeout later. The edit does not take the lock of the shim, so an update can meet the edit halfway (found 2026-10-12, when the e2e tool applied before the webgui had finished):
+
+- REQ-MUT-27: If the template holds neither what the update wrote nor the previous template, the shim MUST keep the template as it is in the restore of REQ-MUT-9. Reason: another change, such as an edit in the webgui, wrote the template after the update did.
+- REQ-MUT-28: If Docker answers the removal of a container with HTTP status 409, the shim MUST say in the error that Docker already removes the container for another change. Reason: DockerClient words status 409 as an image in use. With `force`, Docker answers 409 for a container only while another removal of that container runs.
 
 ## 10. Mounts
 
@@ -840,7 +845,7 @@ End-to-end procedure. Preconditions: the plugin is installed on the server, an A
 1. Write an HCL file with one throwaway container that uses a path, a port, a variable, a secret, a label, and an icon of its own.
 2. Run `tofu apply`.
 3. In the webgui, check that the container runs, offers **Edit**, shows an update status, and carries the badge. The update status is where **Update** appears when a newer image exists.
-4. In the webgui, change the variable with **Edit**, and select **Apply**.
+4. In the webgui, change the variable with **Edit**, and select **Apply**. Wait until the window of the webgui shows **Done**: until then, the webgui replaces the container.
 5. Run `tofu plan`. The plan shows the change of the variable as drift.
 6. Run `tofu apply`. The variable returns to the value in the HCL file.
 7. Change the name in the HCL file, and run `tofu apply`. The server reports the same managed ID under the new name.
@@ -868,9 +873,9 @@ The e2e tool runs this procedure (decided 2026-10-05). A person runs it in that 
 - REQ-E2E-9: Before the first step, the e2e tool MUST list each managed container that an earlier run left, and MUST offer to delete those containers.
 - REQ-E2E-10: The e2e tool MUST give tofu the provider release of its own version from a filesystem mirror, which it fills from the assets of that release. It MUST check each asset against the SHA256SUMS file of the release. A build without a version MUST use the newest provider release. A person MAY name a local provider binary instead.
 - REQ-E2E-11: The e2e tool MUST give the throwaway containers of each run a random suffix in their names.
-- REQ-E2E-12: In step 4 and step 11, the e2e tool MUST watch the API and go on by itself: in step 4 when the variable holds a new value, and in step 11 when a managed container appears that was not managed when the step began.
-- REQ-E2E-13: In step 3 and step 13, the e2e tool MUST ask the person to confirm what the person sees in the webgui.
-- REQ-E2E-14: The e2e tool MUST also check through the API what the procedure asks of the server: that the container runs (step 3), that the variable holds its value again (step 6), that the managed ID stays under the new name (step 7), that the previous container runs again (step 9), and that the container is gone (step 10).
+- REQ-E2E-12: In step 11, the e2e tool MUST watch the API and go on by itself when a managed container appears that was not managed when the step began.
+- REQ-E2E-13: In step 3, step 4, and step 13, the e2e tool MUST ask the person to confirm what the person sees in the webgui. Reason for step 4: DockerMan writes the template before it replaces the container, so the API reports the new value while the old container still runs (changed 2026-10-12).
+- REQ-E2E-14: The e2e tool MUST also check through the API what the procedure asks of the server: that the container runs (step 3), that the variable holds a new value (step 4), that the variable holds its value again (step 6), that the managed ID stays under the new name (step 7), that the previous container runs again (step 9), and that the container is gone (step 10).
 - REQ-E2E-15: The e2e tool MUST show each step with its state, the time when it began, and its duration.
 - REQ-E2E-16: When a step fails, the e2e tool MUST show the end of the output of tofu for that step, and MUST let the person retry the step or stop the run. When the run stops, the throwaway containers MUST stay.
 - REQ-E2E-17: The e2e tool MUST write a summary file into the folder of the run, with the versions, each step, its times, and its result.
