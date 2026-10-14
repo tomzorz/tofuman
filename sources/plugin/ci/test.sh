@@ -49,6 +49,7 @@ in_image() {
     -v "$work/mnt:/mnt/tofumantest" \
     -e TOFUMAN_VAR_INI=$p/tests/fixtures/var.ini \
     -e TOFUMAN_TEST_NETWORK=$network \
+    -e WEBGUI_TAG="$tag" \
     "$@"
 }
 

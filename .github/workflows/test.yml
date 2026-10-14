@@ -13,7 +13,7 @@ jobs:
     strategy:
       matrix:
         # One entry per tested build in sources/plugin/shim/tested-builds.json (REQ-TST-2).
-        webgui: ['7.3.2']
+        webgui: ['7.3.2', '7.3.3']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

@@ -16,6 +16,9 @@
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" support="https://github.com/&github;/issues" icon="code" launch="Docker" min="7.3.2">
 
 <CHANGES>
+### 2026.10.14
+- Covers Unraid 7.3.3. Of the webgui files that tofuman loads, 7.3.3 changes only DockerClient.php, with its own fix for the default icon, and its unraid-api 4.37.5 changes nothing that tofuman uses. tofuman's guard for that icon stays, and does no harm there.
+
 ### 2026.10.12
 - A failed update puts the previous template back before it touches the container, so a rollback that fails halfway no longer leaves a template that the container does not follow. A template that an edit in the webgui writes during the update stays, and the container follows it.
 - When an edit in the webgui is already removing the container that an update removes, the error says so, instead of DockerMan's text about an image in use. The end-to-end tool of provider release 0.2.3 asks you to wait for the webgui to finish an edit before it applies.

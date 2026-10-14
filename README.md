@@ -21,7 +21,7 @@ The plugin adds a tofuman tab to the Docker page, and a small `tofu` badge next 
 1. In Settings, Management Access, API Keys, create a key with only the permission `DOCKER: CREATE_ANY`. tofuman borrows that pair because no official handler of unraid-api uses it.
 2. On the tofuman tab, put the ID of that key (the ID, not the key) into `keyAllowlist` in the policy, and select Save policy.
 
-Before unraid-api 4.37.4, which arrives with Unraid 7.3.3, any API key can also reach a few unraid-api handlers that have no permission check (spec section 8). Keep the key wherever you keep your other secrets.
+Before unraid-api 4.37.4 (Unraid 7.3.3 ships 4.37.5), any API key can also reach a few unraid-api handlers that have no permission check (spec section 8). Keep the key wherever you keep your other secrets.
 
 ## Install the provider
 

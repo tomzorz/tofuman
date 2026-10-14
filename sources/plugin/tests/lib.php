@@ -86,6 +86,11 @@ function network_name(): string {
   return getenv('TOFUMAN_TEST_NETWORK') ?: throw new RuntimeException('TOFUMAN_TEST_NETWORK is not set; run the tests through ci/test.sh');
 }
 
+/** The name in tested-builds.json of the webgui that the tests run against. */
+function tested_build(): string {
+  return 'unraid-' . (getenv('WEBGUI_TAG') ?: throw new RuntimeException('WEBGUI_TAG is not set; run the tests through ci/test.sh'));
+}
+
 function write_policy(Env $env, array $overrides = []): void {
   Tofuman\Json::write($env->policyFile(), array_replace([
     'version' => 1,

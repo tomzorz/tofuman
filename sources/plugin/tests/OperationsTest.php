@@ -392,7 +392,7 @@ function test_managed_gaps_and_diagnostics(): void {
   $diagnostics = Tofuman\Diagnostics::collect($env, $operations, caller(true));
   same(['generatedAt', 'unraid', 'plugin', 'apiModule', 'testedBuild', 'policy', 'registry', 'managed', 'networks', 'gaps', 'running', 'audit', 'operations', 'apiLog'], array_keys($diagnostics));
   same(['[tofuman] operation x started'], $diagnostics['apiLog']);
-  same('unraid-7.3.2', $diagnostics['testedBuild']['match']);
+  same(tested_build(), $diagnostics['testedBuild']['match']);
   check(!str_contains(json_encode($diagnostics), 'hunter2'), 'the diagnostics file holds a masked value');
   refuses(fn() => Tofuman\Diagnostics::collect($env, $operations, caller()), 'only an administrator');
   $stats = Tofuman\Stats::week($env);

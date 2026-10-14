@@ -6,9 +6,9 @@
 # on npm; unraid-api ships it inside its own node_modules, so the API module needs it only to
 # build and to test.
 #
-#   UNRAID_API_TAG=v4.37.4 ci/unraid-shared.sh <work dir>
+#   UNRAID_API_TAG=v4.37.5 ci/unraid-shared.sh <work dir>
 set -eu
-tag=${UNRAID_API_TAG:-v4.37.4}
+tag=${UNRAID_API_TAG:-v4.37.5}
 work=${1:?usage: unraid-shared.sh <work dir>}
 package="$work/unraid-shared-$tag"
 if [ ! -d "$package" ]; then

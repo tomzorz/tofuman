@@ -285,7 +285,7 @@ function test_shim_speaks_json_on_stdin_and_stdout(): void {
   same(['ok' => true, 'result' => []], $ask(['action' => 'list', 'caller' => caller(true)]));
   same(['ok' => false, 'refused' => true, 'errors' => ['the caller x is not on the key allowlist'], 'policyGaps' => 0], $ask(['action' => 'list', 'caller' => ['id' => 'x', 'name' => 'stranger', 'admin' => false]]));
   same(['ok' => true, 'result' => []], $ask(['action' => 'validatePolicy', 'args' => ['policy' => Tofuman\Json::read($env->policyFile())]]));
-  same('unraid-7.3.2', $ask(['action' => 'testedBuild'])['result']['match']);
+  same(tested_build(), $ask(['action' => 'testedBuild'])['result']['match']);
   $refused = $ask(['action' => 'check', 'args' => ['mutation' => 'createContainer', 'definition' => definition()], 'caller' => ['id' => 'x', 'name' => 'stranger', 'admin' => false]]);
   same([false, true], [$refused['ok'], $refused['refused']]);
   same(['ok' => false, 'refused' => true, 'errors' => ['unknown action "nope"'], 'policyGaps' => 0], $ask(['action' => 'nope']));

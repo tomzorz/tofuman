@@ -370,6 +370,8 @@ Decided 2026-10-04: tofu does not move the image of a tag, not even while a pers
 
 Research 2026-10-04: no stable Unraid release after 7.3.2 exists yet. The webgui tag `7.3.3-rc.2` changes one file of the tested build, `DockerClient.php`, where `removeContainer` stops deleting the default icon (REQ-MUT-26). unraid-api 4.37.4 loads plugins as 4.35.1 does, with the same global `ValidationPipe`. A tested build for 7.3.3 therefore needs new hashes only.
 
+Checked 2026-10-14: Unraid 7.3.3 ships the webgui at tag `7.3.3` (`31c22f8`) and unraid-api 4.37.5. Of the files of the tested build, only `DockerClient.php` changed, as the release candidate showed. unraid-api 4.37.5 changes nothing that a plugin sees: a UPnP fix, a redirect check on the page that authorizes API keys, and version numbers. The tested build `unraid-7.3.3` came from steps 1 to 4 of the procedure below. Step 5 waits until a server runs 7.3.3.
+
 For each new Unraid release, a maintainer runs this procedure:
 
 1. Check out the webgui at the tag of the new Unraid release.
@@ -778,7 +780,7 @@ How an API module stays installed across a reboot is undocumented. unraid-api lo
 - REQ-PKG-2: After a reboot of the server, unraid-api MUST load the API module without an action of a person.
 - REQ-PKG-3: After an update of Unraid OS, unraid-api MUST load the API module. If unraid-api does not load the API module, the tab MUST show that fact.
 - REQ-PKG-4: The API module MUST declare `@nestjs/common`, `@nestjs/graphql`, `graphql`, and `@unraid/shared` as peer dependencies with version ranges, and MUST NOT bundle them. Reason: unraid-api 4.37.4 moved to newer versions of NestJS and of Apollo Server.
-- REQ-PKG-5: The API module MUST load on unraid-api 4.35.1 and on unraid-api 4.37.4.
+- REQ-PKG-5: The API module MUST load on unraid-api 4.35.1, which Unraid 7.3.2 ships, and on unraid-api 4.37.5, which Unraid 7.3.3 ships.
 - REQ-PKG-6: The `.plg` file MUST install the shim and the tab under `/usr/local/emhttp/plugins/tofuman/`.
 - REQ-PKG-7: On removal, the `.plg` file MUST remove the API module from unraid-api.
 - REQ-PKG-8: On removal, the `.plg` file MUST keep the registry, the policy, the audit log, the templates, and the containers.
@@ -917,7 +919,7 @@ The plugin runs inside the GPL code of Unraid: the shim loads the GPLv2 helpers 
 
 ## 23. References
 
-Read 2026-09-27 and 2026-09-28, pinned. unraid/webgui at tag `7.3.2` ([`369f0b2`](https://github.com/unraid/webgui/tree/369f0b2994584a6b6c8e6e570f5f86401d289234)). unraid/api `v4.35.1` ([`a9625ae`](https://github.com/unraid/api/tree/a9625ae20a589e739926923b28ca7efe14233372)), which Unraid 7.3.2 ships, `v4.37.4` ([`ad26830`](https://github.com/unraid/api/tree/ad268301ca78da1fa47fd3bb87e60fcedc458c5b)), which Unraid 7.3.3 ships, and `main` ([`d061525`](https://github.com/unraid/api/tree/d0615255e0ce062f7a8262e560f963d07f311539)).
+Read 2026-09-27 and 2026-09-28, pinned. unraid/webgui at tag `7.3.2` ([`369f0b2`](https://github.com/unraid/webgui/tree/369f0b2994584a6b6c8e6e570f5f86401d289234)), and at tag `7.3.3` ([`31c22f8`](https://github.com/unraid/webgui/tree/31c22f8327cca774dcbddd573dc76f70e87b2f10), compared 2026-10-14). unraid/api `v4.35.1` ([`a9625ae`](https://github.com/unraid/api/tree/a9625ae20a589e739926923b28ca7efe14233372)), which Unraid 7.3.2 ships, `v4.37.4` ([`ad26830`](https://github.com/unraid/api/tree/ad268301ca78da1fa47fd3bb87e60fcedc458c5b)), the first with the permission change below, `v4.37.5` ([`d4d9733`](https://github.com/unraid/api/tree/d4d9733646a7a271eeb345b41648217ea3b10179)), which Unraid 7.3.3 ships, and `main` ([`d061525`](https://github.com/unraid/api/tree/d0615255e0ce062f7a8262e560f963d07f311539)).
 
 - `ExtraParams` and `PostArgs` go into the `docker create` string raw ([Helpers.php L565-566](https://github.com/unraid/webgui/blob/369f0b2994584a6b6c8e6e570f5f86401d289234/emhttp/plugins/dynamix.docker.manager/include/Helpers.php#L565-L566)), the name sits raw inside double quotes ([L430](https://github.com/unraid/webgui/blob/369f0b2994584a6b6c8e6e570f5f86401d289234/emhttp/plugins/dynamix.docker.manager/include/Helpers.php#L430)), and `execCommand` runs the result through `popen`, which is `/bin/sh -c` ([L714](https://github.com/unraid/webgui/blob/369f0b2994584a6b6c8e6e570f5f86401d289234/emhttp/plugins/dynamix.docker.manager/include/Helpers.php#L714)). Missing host paths get created only when `xmlToCommand` gets `create_paths` ([L518-519](https://github.com/unraid/webgui/blob/369f0b2994584a6b6c8e6e570f5f86401d289234/emhttp/plugins/dynamix.docker.manager/include/Helpers.php#L518-L519)).
 - Only `dockerman` gets a template and an update status. Every other value of `net.unraid.docker.managed` nulls both ([DockerClient.php L415-417](https://github.com/unraid/webgui/blob/369f0b2994584a6b6c8e6e570f5f86401d289234/emhttp/plugins/dynamix.docker.manager/include/DockerClient.php#L415-L417)).
