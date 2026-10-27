@@ -1,0 +1,4 @@
+{
+  "$schema": "https://raw.githubusercontent.com/tomzorz/portolan/main/docs/project.schema.json",
+  "description": "An Unraid plugin plus an OpenTofu provider that let tofu declare Docker containers which stay ordinary Unraid containers, written as native DockerMan templates through the webgui\u0027s own helpers."
+}
