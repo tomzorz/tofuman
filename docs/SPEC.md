@@ -372,7 +372,7 @@ Research 2026-10-04: no stable Unraid release after 7.3.2 exists yet. The webgui
 
 Checked 2026-10-14: Unraid 7.3.3 ships the webgui at tag `7.3.3` (`31c22f8`) and unraid-api 4.37.5. Of the files of the tested build, only `DockerClient.php` changed, as the release candidate showed. unraid-api 4.37.5 changes nothing that a plugin sees: a UPnP fix, a redirect check on the page that authorizes API keys, and version numbers. The tested build `unraid-7.3.3` came from steps 1 to 4 of the procedure below.
 
-Checked 2026-10-27: Unraid 7.3.4 ships the webgui at tag `7.3.4`, and that tag names the commit of tag `7.3.3` (`31c22f8`). Unraid 7.3.4 also ships unraid-api 4.37.5. The tested build `unraid-7.3.3` therefore covers Unraid 7.3.4, and the tab names that tested build on Unraid 7.3.4. Unraid 7.3.4 gets no tested build and no CI entry of its own. Step 5 for `unraid-7.3.3` runs on a server with Unraid 7.3.4, because no server ran Unraid 7.3.3.
+Checked 2026-10-27: Unraid 7.3.4 ships the webgui at tag `7.3.4`, and that tag names the commit of tag `7.3.3` (`31c22f8`). Unraid 7.3.4 also ships unraid-api 4.37.5. The tested build `unraid-7.3.3` therefore covers Unraid 7.3.4, and the tab names that tested build on Unraid 7.3.4. Unraid 7.3.4 gets no tested build and no CI entry of its own. Step 5 for `unraid-7.3.3` runs on a server with Unraid 7.3.4, because no server ran Unraid 7.3.3. With plugin 2026.10.27 and provider 0.2.3, the end-to-end procedure of section 18 passed on that server on 2026-10-27.
 
 For each new Unraid release, a maintainer runs this procedure:
 

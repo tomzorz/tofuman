@@ -4,7 +4,7 @@ Declare the containers of an Unraid server in OpenTofu, and keep them ordinary U
 
 tofuman is an Unraid plugin plus an OpenTofu provider. The plugin writes DockerMan templates through the webgui's own code, so Edit, Update, Community Applications, CA Auto Update and Appdata Backup keep working on the containers that tofu manages. A change made in the webgui shows up in `tofu plan` as drift.
 
-Status: early, and in use. Unraid 7.3.2 is the tested release, and the end-to-end procedure passed there on 2026-10-04. On an Unraid release without a tested build the plugin still answers queries, but it refuses every change until a plugin release covers that Unraid release. Every rule lives in [docs/SPEC.md](docs/SPEC.md).
+Status: early, and in use. The tested releases are Unraid 7.3.2, 7.3.3 and 7.3.4. The end-to-end procedure passed on 7.3.2 on 2026-10-04, and on 7.3.4 on 2026-10-27. On an Unraid release without a tested build the plugin still answers queries, but it refuses every change until a plugin release covers that Unraid release. Every rule lives in [docs/SPEC.md](docs/SPEC.md).
 
 ## Install the plugin
 
