@@ -75,6 +75,32 @@ function test_mounts_find_the_root_filesystem(): void {
   check(count($errors) === 1 && str_contains($errors[0], 'the mount behind the path is missing'), 'a path on the root filesystem passed');
 }
 
+/** REQ-MNT-4 to REQ-MNT-7: missing directories come out as Apply in the webgui makes them, whatever the umask, and existing ones stay as they are. */
+function test_mounts_create_missing_directories_like_the_webgui(): void {
+  $fresh = missing_dir();
+  $kept = missing_dir();
+  mkdir($kept);
+  chmod($kept, 0750);
+  $d = definition(['configEntries' => [
+    entry('PATH', 'Config', '/config', "$fresh/app/config", '', 'rw'),
+    entry('PATH', 'Kept', '/kept', $kept, '', 'rw'),
+    entry('PATH', 'Data', '/data', "$kept/data", '', 'rw'),
+    entry('PORT', 'Web', '8080', '18081', '8080', 'tcp'),
+  ]]);
+  $made = [$fresh, "$fresh/app", "$fresh/app/config", "$kept/data"];
+  $umask = umask(022); // what mkdir alone would turn into 0755
+  try {
+    same($made, Mounts::create($d), 'the directories it created, outermost first');
+  } finally {
+    umask($umask);
+  }
+  foreach ($made as $dir) {
+    same([99, 100, '0777'], owner_and_mode($dir), $dir);
+  }
+  same([0, 0, '0750'], owner_and_mode($kept), 'the directory that existed');
+  same([], Mounts::create($d), 'a second run, with every directory there');
+}
+
 function test_policy_resolves_symbolic_links(): void {
   $link = MOUNTED . '/tofumantest-link';
   @unlink($link);

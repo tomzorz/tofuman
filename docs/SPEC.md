@@ -286,7 +286,7 @@ unraid-api before 4.37.4 lets each authenticated API key call every handler with
 
 An operation for `createContainer` or `updateContainer` runs these steps in order:
 
-1. The shim checks the mounts (section 10).
+1. The shim checks the mounts, and then creates the missing directories of the host paths (section 10).
 2. The shim pulls the image.
 3. The shim writes the template with `postToXML`.
 4. For `updateContainer`, the shim stops the old container and removes the old container.
@@ -336,7 +336,27 @@ A bind mount whose host path is missing makes Docker create the directory on the
 
 - REQ-MNT-1: For each path config entry, the shim MUST check that the nearest existing ancestor of the host path is on a filesystem other than the root filesystem of the server.
 - REQ-MNT-2: If the check fails, the operation MUST fail with an error that names the host path.
-- REQ-MNT-3: The shim MUST call `xmlToCommand` with `create_paths` set to false.
+- REQ-MNT-3: The shim MUST call `xmlToCommand` with `create_paths` set to false. Reason: the shim creates the missing directories by REQ-MNT-4, and `xmlToCommand` ignores each failure of its own `mkdir`, `chown`, and `chgrp`.
+
+Apply in the webgui creates each missing host path before Docker creates the container. `xmlToCommand` with `create_paths` set to true runs `mkdir` with the mode 0777 for that host path. It then runs `chown` to the user 99 (`nobody`) and `chgrp` to the group 100 (`users`). The source is the `create_paths` branch of `xmlToCommand` in `Helpers.php` of the webgui at tag `7.3.2`. Without that step, Docker creates a missing host path itself, with the owner `root`, the group `root`, and the mode 0755. An image that runs as a user other than `root` cannot write into that directory.
+
+Decided 2026-11-02, after an image that runs as the user 1654 crashed at its start in directories that Docker created: the shim creates the missing directories as Apply in the webgui does.
+
+- REQ-MNT-4: After the check of REQ-MNT-1 passes for each path config entry, the shim MUST create a directory at each host path that does not exist. The shim MUST also create each parent directory of that host path that does not exist.
+- REQ-MNT-5: The shim MUST give each directory that the shim creates the owner 99, the group 100, and the mode 0777. Reason: Apply in the webgui gives a host path that owner and that group, and asks `mkdir` for that mode.
+- REQ-MNT-6: The shim MUST set the mode with `chmod`. Reason: the umask of the process removes bits from the mode that `mkdir` gets, and the mode 0755 crashed the image of 2026-11-02.
+- REQ-MNT-7: The shim MUST leave the owner, the group, and the mode of each directory that existed before the operation unchanged.
+- REQ-MNT-8: If at least one of `mkdir`, `chown`, `chgrp`, and `chmod` fails for a directory, the operation MUST fail at the step `directories`. The error MUST name the host path and the directory.
+- REQ-MNT-9: If at least one of `chown`, `chgrp`, and `chmod` fails for a directory, the shim MUST remove that directory before the operation fails. Reason: a retry otherwise finds the directory without that owner, group, or mode, and REQ-MNT-7 then keeps the directory as it is.
+- REQ-MNT-10: If a later step of the operation fails, the shim MUST keep each directory that the shim created. Reason: a retry needs the same directories, and a container can write into them before its start check fails.
+
+The webgui gives the owner 99 and the group 100 only to the host path itself, and the parent directories that its `mkdir` creates keep the owner `root`. REQ-MNT-5 covers each parent directory that the shim creates too, because a parent directory can become the host path of another container later.
+
+A test with plain Docker on 2026-11-02 gave these results for the two directories of the image that runs as the user 1654:
+
+- Owner `root`, group `root`, mode 0755: the container crashed.
+- Owner 99, group 100, mode 0755: the container crashed.
+- Owner 99, group 100, mode 0777: the container started and wrote its files as the user 1654.
 
 ## 11. Definitions, images, and what tofu owns
 
@@ -756,7 +776,7 @@ Each line is one JSON object, added 2026-10-04:
 {"id":"5b0e7a51-0000-4000-8000-000000000000","mutation":"updateContainer","caller":"<API key ID>","callerName":"<API key name>","providerVersion":"0.2.0","managedId":"8f1c2d3e-0000-4000-8000-000000000000","name":"example","queuedAt":"2026-10-04T12:00:00Z","startedAt":"2026-10-04T12:00:01Z","endedAt":"2026-10-04T12:00:16Z","durationMs":15020,"result":"failed","step":"start check","error":"<the error of the operation>","changes":["variable GREETING"],"steps":[{"step":"pull","startedAt":"2026-10-04T12:00:01Z","ms":2100,"digest":"sha256:<64 hexadecimal digits>"},{"step":"create","startedAt":"2026-10-04T12:00:04Z","ms":400,"command":"docker create <arguments>","output":"<container ID>"},{"step":"start check","startedAt":"2026-10-04T12:00:05Z","ms":3000,"exitCode":3,"log":["<log line>"]}]}
 ```
 
-`result` is exactly one of `succeeded` or `failed`. `step` and `error` are null for an operation that succeeded. Each entry of `steps` names one step of section 9, with the time it started and its duration in milliseconds, and holds the facts of that step: the digest after a pull, the command and its output for a create, and the exit code and the log lines of a failed start check.
+`result` is exactly one of `succeeded` or `failed`. `step` and `error` are null for an operation that succeeded. Each entry of `steps` names one step of section 9, with the time it started and its duration in milliseconds, and holds the facts of that step: the directories that the shim created in the step `directories`, the digest after a pull, the command and its output for a create, and the exit code and the log lines of a failed start check.
 
 - REQ-FILE-6: The command in the operation log MUST show the value of each config entry with mask true as `***`.
 - REQ-FILE-7: Elsewhere in the operation log, in the audit log, and in the error of an operation, the shim MUST show each occurrence of the value of a config entry with mask true as `***`, if that value has at least 4 characters. Reason: the log lines of a container are free text, and a shorter value would turn ordinary words into `***`.

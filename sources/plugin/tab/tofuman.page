@@ -443,6 +443,7 @@ Markdown="false"
     var steps = $('<table class="tofuman-steps">');
     $.each(operation.steps || [], function (_, step) {
       var facts = $('<td>');
+      if (step.created && step.created.length) facts.append($('<pre>').text('created ' + step.created.join('\ncreated ')));
       if (step.digest) facts.append($('<div class="tofuman-mono">').text(step.digest));
       if (step.command) facts.append($('<pre>').text(step.command));
       if (step.output) facts.append($('<div class="tofuman-mono">').text(step.output));

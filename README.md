@@ -67,6 +67,8 @@ resource "tofuman_container" "whoami" {
 
 The policy on the tab decides what a container may have: host paths under its bind roots (`/mnt/user/appdata/` at first), its networks (`bridge` at first), the `extra_params` flags it lists, and exceptions per container for privileged mode, the host network, the host IPC namespace and devices. `tofu plan` asks the server to run the same checks, so a refusal shows in the plan, before anything changes. When the policy is what is missing, the Policy heading on the tab says how many entries it lacks. Open it and tick them, and Add the selected entries to the editor puts them into the policy for you to save.
 
+A host path that does not exist yet is created the way Apply in the webgui creates it: the folder, and each missing folder above it, owned by nobody:users with mode 0777, so an image that runs as a user other than root can write there. A folder that already exists keeps its owner and mode.
+
 ## Testing a fresh build of your own image
 
 - Push a new build of the tag, then select Update for the container on the Docker page, or let CA Auto Update do it. The template does not change, so tofu sees no drift.
@@ -83,7 +85,7 @@ The policy on the tab decides what a container may have: host paths under its bi
 ## When something goes wrong
 
 - `TF_LOG=DEBUG tofu apply` shows each request to the server with its duration, and each step of each operation that the provider waits for.
-- The Activity list on the tab shows each mutation. Select a line with a chevron to see its operation step by step: the digest of the pull, the `docker create` command with masked values hidden, its output, and for a failed start check the exit code and the log lines.
+- The Activity list on the tab shows each mutation. Select a line with a chevron to see its operation step by step: the folders it created, the digest of the pull, the `docker create` command with masked values hidden, its output, and for a failed start check the exit code and the log lines.
 - The Diagnostics file link at the top of the tab downloads what someone helping you needs: versions, the build check, the policy, the registry, the audit and operation logs, and the lines of the unraid-api log that mention tofuman. It holds no API key, and masked values show as `***`.
 - A failed operation raises an Unraid notification, and so does an Unraid release without a tested build.
 

@@ -1,8 +1,9 @@
 <?php
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
-// Assertions and fixtures for the tests. Every container a test creates has a name that
-// starts with tofumantest-, and reset_state() removes exactly those.
+// Assertions and fixtures for the tests. Every container a test creates, and every directory
+// it makes under MOUNTED, has a name that starts with tofumantest-, and reset_state() removes
+// exactly those.
 
 declare(strict_types=1);
 
@@ -146,6 +147,17 @@ function definition(array $overrides = []): array {
   ], $overrides);
 }
 
+/** A path under MOUNTED that does not exist yet. */
+function missing_dir(): string {
+  return MOUNTED . '/tofumantest-' . bin2hex(random_bytes(4));
+}
+
+/** @return array{0: int, 1: int, 2: string} the owner, the group, and the mode of the path */
+function owner_and_mode(string $path): array {
+  clearstatcache();
+  return [fileowner($path), filegroup($path), sprintf('%04o', fileperms($path) & 07777)];
+}
+
 function inspect(string $container): array {
   exec('docker inspect ' . escapeshellarg($container) . ' 2>/dev/null', $lines, $code);
   check($code === 0, "docker inspect $container failed");
@@ -231,6 +243,7 @@ function last_audit(Env $env): array {
 function reset_state(): void {
   global $dockerManPaths, $DockerClient;
   exec("docker ps -aq --filter name=tofumantest- | xargs -r docker rm -f >/dev/null 2>&1");
+  exec('rm -rf ' . MOUNTED . '/tofumantest-*');
   foreach (glob("{$dockerManPaths['templates-user']}/my-tofumantest-*.xml") ?: [] as $file) {
     unlink($file);
   }

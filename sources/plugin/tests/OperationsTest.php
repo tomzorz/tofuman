@@ -130,6 +130,36 @@ function test_a_missing_mount_stops_the_operation(): void {
   check(!is_file(template_file('tofumantest-a')), 'a missing mount left a template');
 }
 
+/** REQ-MNT-4 and section 16.4: a create, and an update that adds a path, make the missing directories, and the operation log names them. */
+function test_operations_make_the_missing_directories(): void {
+  $env = make_env();
+  write_policy($env);
+  $operations = new Operations($env);
+  $config = missing_dir() . '/config';
+  $cache = missing_dir() . '/cache';
+  $id = $operations->create(definition(['configEntries' => [entry('PATH', 'Config', '/config', $config, '', 'rw')]]), caller(), ['id' => 'op-create'])['id'];
+  $operations->update($id, definition(['configEntries' => [entry('PATH', 'Config', '/config', $config, '', 'rw'), entry('PATH', 'Cache', '/cache', $cache, '', 'rw')]]), caller(), ['id' => 'op-update']);
+  $created = fn(string $operation) => array_column(Tofuman\OperationLog::find($env, $operation)['steps'], null, 'step')['directories']['created'];
+  same([dirname($config), $config], $created('op-create'));
+  same([dirname($cache), $cache], $created('op-update'), 'the directories of the update, which leaves the existing ones alone');
+  foreach ([dirname($config), $config, dirname($cache), $cache] as $dir) {
+    same([99, 100, '0777'], owner_and_mode($dir), $dir);
+  }
+  check(in_array("$cache:/cache:rw", inspect('tofumantest-a')['HostConfig']['Binds'], true), 'the bind mount of the update is missing');
+}
+
+/** REQ-MNT-8 with REQ-MUT-8: a directory that the shim cannot make stops the operation before the template changes. */
+function test_a_directory_that_cannot_be_made_stops_the_operation(): void {
+  $env = make_env();
+  write_policy($env);
+  $file = missing_dir();
+  file_put_contents($file, '');
+  $failure = fails_at(fn() => (new Operations($env))->create(definition(['configEntries' => [entry('PATH', 'Config', '/config', "$file/config", '', 'rw')]]), caller()), 'directories');
+  check(str_contains($failure->getMessage(), "path $file/config: cannot create $file/config") && str_contains($failure->getMessage(), 'Not a directory'), "the failure does not name the path and the cause: {$failure->getMessage()}");
+  check(!is_file(template_file('tofumantest-a')) && !container_exists('tofumantest-a'), 'a failed directory left a template or a container');
+  same(['createContainer', 'failed'], [last_audit($env)['action'], last_audit($env)['result']]);
+}
+
 function test_a_custom_network_takes_ip_and_mac(): void {
   $env = make_env();
   write_policy($env);
@@ -216,13 +246,14 @@ function test_operations_leave_a_line_each(): void {
   same(['succeeded', 'succeeded', 'succeeded'], array_column($lines, 'result'));
   same('2026-10-04T12:00:00Z', $lines[0]['queuedAt']);
   same('0.2.0', $lines[0]['providerVersion']);
-  same(['mounts', 'pull', 'template', 'create'], array_column($lines[0]['steps'], 'step'), 'the steps of a create without autostart');
-  same(['mounts', 'pull', 'template', 'remove', 'create'], array_column($lines[1]['steps'], 'step'), 'the steps of an update of a stopped container');
+  same(['mounts', 'directories', 'pull', 'template', 'create'], array_column($lines[0]['steps'], 'step'), 'the steps of a create without autostart');
+  same(['mounts', 'directories', 'pull', 'template', 'remove', 'create'], array_column($lines[1]['steps'], 'step'), 'the steps of an update of a stopped container');
   same(['remove', 'template'], array_column($lines[2]['steps'], 'step'), 'the steps of a delete');
-  $create = $lines[0]['steps'][3];
+  $steps = array_column($lines[0]['steps'], null, 'step');
+  $create = $steps['create'];
   check(str_contains($create['command'], "'SECRET'='***'") && !str_contains(json_encode($lines), 'hunter2'), 'the operation log holds the masked value: ' . $create['command']);
   check(preg_match('/^[0-9a-f]{64}$/', $create['output']) === 1, "the output of docker create is not a container ID: {$create['output']}");
-  check(str_starts_with((string)$lines[0]['steps'][1]['digest'], 'sha256:'), 'the pull left no digest');
+  check(str_starts_with((string)$steps['pull']['digest'], 'sha256:'), 'the pull left no digest');
   same(['extraParams'], $lines[1]['changes']);
   same(null, Tofuman\OperationLog::current($env), 'an ended operation is still in RAM');
   $audit = (new Tofuman\Audit($env->auditFile()))->tail(3);
@@ -327,7 +358,7 @@ function test_a_start_check_of_zero_is_skipped(): void {
   write_policy($env);
   (new Operations($env))->create(definition(['autostart' => true, 'postArgs' => ['true']]), caller(), ['startCheck' => 0]);
   check(container_exists('tofumantest-a'), 'the container is gone');
-  same(['mounts', 'pull', 'template', 'create', 'start'], array_column(Tofuman\OperationLog::tail($env, 1)[0]['steps'], 'step'));
+  same(['mounts', 'directories', 'pull', 'template', 'create', 'start'], array_column(Tofuman\OperationLog::tail($env, 1)[0]['steps'], 'step'));
 }
 
 /** REQ-MUT-25 and REQ-TAB-27: the query `check` answers without an audit line, and remembers the policy gaps. */

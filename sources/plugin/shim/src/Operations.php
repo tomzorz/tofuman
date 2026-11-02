@@ -518,13 +518,15 @@ final class Operations {
     ];
   }
 
-  /** The steps that come before the template changes: the mounts (REQ-MNT-1) and the pull. */
+  /** The steps that come before the template changes: the mounts (REQ-MNT-1), the missing directories (REQ-MNT-4), and the pull. */
   private function prepare(array $d, OperationLog $log): void {
     $log->step('mounts');
     $errors = Mounts::check($d);
     if ($errors) {
       throw new Failure('mounts', implode('; ', $errors)); // REQ-MNT-2
     }
+    $log->step('directories');
+    $log->fact('created', Mounts::create($d));
     $log->step('pull');
     $log->fact('digest', Docker::pull($d['repository']));
   }
