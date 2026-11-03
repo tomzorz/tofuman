@@ -9,7 +9,7 @@ An Unraid plugin and an OpenTofu provider that let tofu declare Docker container
 - The plugin and the provider share this repo until the provider is published to a registry, which needs a repo of its own.
 - License: GPL-2.0-or-later for everything except the provider, which is MIT in its own folder. Every source file starts with an `SPDX-License-Identifier` line.
 - Archetype layout: projects go in `sources/<project>/`, each with its stack's ignore file from archetype, created on the day the project exists.
-- LFS is on. A fresh clone needs `git lfs install --local`.
+- LFS is on. A fresh clone needs `git lfs install --local`, and, when the remote is SSH, `lfs.url` set locally to GitHub's HTTPS LFS endpoint (`git config lfs.url https://github.com/tomzorz/tofuman.git/info/lfs`), because git-lfs's pre-push hook can hang on an SSH remote.
 - Spikes live in `spikes/YYYY-MM-DD-<slug>/` and are committed. Each has a README with its question, findings and verdict.
 - Anything worth keeping past this session goes through the Record skill. It reads `AGENTS.records.md` next to this file for where each kind of information lives here. "Remember this" and "park this" are always worth keeping; anything the code or git history already says never is.
 
