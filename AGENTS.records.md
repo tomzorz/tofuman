@@ -6,6 +6,7 @@ Where information produced while working in this area gets recorded. Read by the
 
 - Scope: this repository
 - Version control: git, single-branch, public on GitHub
+- Ownership: the agent's own, stated in `AGENTS.md`
 - Spec language: Lojbanlite for anything normative (`docs/SPEC.md`)
 - Spike sandbox: `spikes/`, committed, one `YYYY-MM-DD-<slug>/` folder per spike with a README holding the question, findings and verdict
 
